@@ -27,9 +27,14 @@ def fetch_jotform_data():
         addr_raw = ans.get(str(FIELD_ID["address"]), {}).get("answer", {})
         if not isinstance(addr_raw, dict):
             addr_raw = {}
+        name_raw = ans.get(str(FIELD_ID["name"]), {}).get("answer", {})
+        if isinstance(name_raw, dict):
+            name_val = f"{name_raw.get('first','')} {name_raw.get('last','')}".strip()
+        else:
+            name_val = name_raw if isinstance(name_raw, str) else None
         records.append({
             "SubmissionID": sub.get("id"),
-            "Name": ans.get(str(FIELD_ID["name"]), {}).get("answer"),
+            "Name": name_val,
             "Source": ans.get(str(FIELD_ID["source"]), {}).get("answer"),
             "Status": ans.get(str(FIELD_ID["status"]), {}).get("answer"),
             "ServiceType": ans.get(str(FIELD_ID["service_type"]), {}).get("answer"),
@@ -45,7 +50,11 @@ def fetch_jotform_data():
 def add_submission(payload: dict):
     form = {}
     for qid, val in payload.items():
-        if qid == FIELD_ID["address"] and isinstance(val, dict):
+        if qid == FIELD_ID["name"] and isinstance(val, str):
+            parts = val.split(" ", 1)
+            form[f"submission[{qid}][first]"] = parts[0]
+            form[f"submission[{qid}][last]"] = parts[1] if len(parts) > 1 else ""
+        elif qid == FIELD_ID["address"] and isinstance(val, dict):
             for subfield, subval in val.items():
                 form[f"submission[{qid}][{subfield}]"] = subval
         else:
@@ -54,10 +63,10 @@ def add_submission(payload: dict):
     url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apiKey={API_KEY}"
     resp = requests.post(url, data=form, timeout=30)
     ok = resp.status_code == 200
-    return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
+    return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text, "sent_form": form})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.4", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.4 — Correct Submission Format")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.5", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.5 — Name Field Fix")
 
 df = fetch_jotform_data()
 if df.empty:
@@ -90,7 +99,7 @@ with tab_all:
 # Add Ticket
 with tab_add:
     st.subheader("Add Ticket")
-    name = st.text_input("Name", key="add_name")
+    name = st.text_input("Name (First Last)", key="add_name")
     source = st.selectbox("Source", SOURCE_LIST, key="add_source")
     status = st.selectbox("Status", STATUS_LIST, key="add_status")
     service_type = st.selectbox("Service Type", SERVICE_TYPES, key="add_service_type")
@@ -124,10 +133,10 @@ with tab_add:
         else:
             st.error("❌ Failed to add ticket."); st.write(resp)
 
-# Edit Ticket (not fully supported by JotForm API for answers)
+# Edit Ticket
 with tab_edit:
     st.subheader("Edit Ticket (Limited Support)")
-    st.info("JotForm API does not fully support editing submission answers. You may need to re-create tickets.")
+    st.info("JotForm API does not fully support editing submission answers.")
 
 # KPI Dashboard
 with tab_kpi:
