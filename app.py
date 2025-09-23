@@ -2,19 +2,28 @@
 import streamlit as st
 import pandas as pd
 import requests
-import csv
-import os
-from config import API_KEY, FORM_ID, FIELD_ID
+import os, json
+from config import API_KEY, FORM_ID, FIELD_ID, BLOCKED_WORDS as DEFAULT_BLOCKED
 
 JOTFORM_API = "https://api.jotform.com"
-STATUS_LIST = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer","Lost"]
-SOURCE_LIST = ["Email","Social Media","Phone Call","Walk-in","In Person"]
-SERVICE_TYPES = [
-    "Internet","Phone","TV","Cell Phone",
-    "Internet and Phone","Internet and TV","Internet and Cell Phone"
-]
+SETTINGS_FILE = "settings.json"
 
-LOG_FILE = "erase_log.csv"
+def load_settings():
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r") as f:
+                return json.load(f)
+        except:
+            return {"blocked_words": DEFAULT_BLOCKED}
+    return {"blocked_words": DEFAULT_BLOCKED}
+
+def save_settings(settings: dict):
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(settings, f)
+
+def reset_settings():
+    if os.path.exists(SETTINGS_FILE):
+        os.remove(SETTINGS_FILE)
 
 def fetch_jotform_data():
     url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apikey={API_KEY}"
@@ -26,9 +35,6 @@ def fetch_jotform_data():
         ans = sub.get("answers") or {}
         if not isinstance(ans, dict):
             ans = {}
-        addr_raw = ans.get(str(FIELD_ID["address"]), {}).get("answer", {})
-        if not isinstance(addr_raw, dict):
-            addr_raw = {}
         name_raw = ans.get(str(FIELD_ID["name"]), {}).get("answer", {})
         if isinstance(name_raw, dict):
             first = name_raw.get("first", "").strip()
@@ -38,87 +44,67 @@ def fetch_jotform_data():
             name_val = name_raw.strip()
         else:
             name_val = None
-        display_name = name_val if name_val else f"Unnamed ({sub.get('id')})"
-        if addr_raw.get("city") or addr_raw.get("state"):
-            display_name += f" – {addr_raw.get('city','')}, {addr_raw.get('state','')}"
         records.append({
             "SubmissionID": sub.get("id"),
-            "DisplayName": display_name,
+            "DisplayName": name_val if name_val else f"Unnamed ({sub.get('id')})",
             "Name": name_val,
             "Source": ans.get(str(FIELD_ID["source"]), {}).get("answer"),
             "Status": ans.get(str(FIELD_ID["status"]), {}).get("answer"),
             "ServiceType": ans.get(str(FIELD_ID["service_type"]), {}).get("answer"),
-            "LostReason": ans.get(str(FIELD_ID["lost_reason"]), {}).get("answer"),
-            "Street": addr_raw.get("addr_line1"),
-            "Street2": addr_raw.get("addr_line2"),
-            "City": addr_raw.get("city"),
-            "State": addr_raw.get("state"),
-            "Postal": addr_raw.get("postal")
+            "LostReason": ans.get(str(FIELD_ID["lost_reason"]), {}).get("answer")
         })
-    df = pd.DataFrame(records)
-    if not df.empty:
-        df = df[~df["DisplayName"].str.startswith("Unnamed (")]
-    return df
+    return pd.DataFrame(records)
 
-def delete_submission(sub_id):
-    del_url = f"{JOTFORM_API}/submission/{sub_id}?apiKey={API_KEY}"
-    d = requests.delete(del_url, timeout=30)
-    status, text = d.status_code, d.text
-    # Log the attempt
-    write_header = not os.path.exists(LOG_FILE)
-    with open(LOG_FILE, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["id","status","text"])
-        if write_header:
-            writer.writeheader()
-        writer.writerow({"id": sub_id, "status": status, "text": text})
-    return status == 200, text
+def apply_blocklist(df, blocked_words):
+    if df.empty:
+        return df, 0
+    mask = df["DisplayName"].astype(str).str.lower().apply(
+        lambda x: any(word.lower() in x for word in blocked_words)
+    )
+    hidden_count = mask.sum()
+    df = df[~mask]
+    return df, hidden_count
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.17", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.17 — Delete Selected Ticket")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.19", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.19 — Settings with Persistent Blocklist")
+
+settings = load_settings()
+blocked_words = settings.get("blocked_words", DEFAULT_BLOCKED)
 
 df = fetch_jotform_data()
+df, hidden_count = apply_blocklist(df, blocked_words)
 
-tab_all, tab_kpi = st.tabs(["📋 All Tickets", "📊 KPI Dashboard"])
+if hidden_count > 0:
+    st.info(f"ℹ️ {hidden_count} tickets hidden (matched blocked words: {', '.join(blocked_words)})")
+
+tab_all, tab_kpi, tab_settings = st.tabs(["📋 All Tickets", "📊 KPI Dashboard", "⚙️ Settings"])
 
 with tab_all:
     st.subheader("All Tickets Preview")
     if df.empty:
         st.info("No tickets available.")
     else:
-        for idx, row in df.iterrows():
-            cols = st.columns([3,2,2,2,2,2,2,1,1])
-            cols[0].write(row["DisplayName"])
-            cols[1].write(row["Source"])
-            cols[2].write(row["Status"])
-            cols[3].write(row["ServiceType"])
-            cols[4].write(row["City"])
-            cols[5].write(row["State"])
-            cols[6].write(row["LostReason"])
-            sid = row["SubmissionID"]
-            if cols[7].button("✏️ Edit", key=f"editbtn_{idx}_{sid}"):
-                st.session_state.edit_ticket_id = sid
-                st.rerun()
-            # Delete button with confirmation
-            with cols[8]:
-                if st.button("🗑 Delete", key=f"delbtn_{idx}_{sid}"):
-                    confirm_key = f"confirmdel_{sid}"
-                    st.session_state[confirm_key] = True
-            confirm_key = f"confirmdel_{sid}"
-            if st.session_state.get(confirm_key, False):
-                st.warning("⚠️ Confirm deletion of this ticket")
-                if st.checkbox("Yes, delete this ticket permanently", key=f"chk_{sid}"):
-                    ok, msg = delete_submission(sid)
-                    if ok:
-                        st.success(f"✅ Ticket {sid} deleted.")
-                        del st.session_state[confirm_key]
-                        st.rerun()
-                    else:
-                        st.error(f"❌ Failed to delete {sid}: {msg}")
+        st.dataframe(df[["DisplayName","Source","Status","ServiceType","LostReason"]])
 
 with tab_kpi:
     st.subheader("📊 KPI Dashboard")
     if not df.empty:
         st.markdown("### Tickets by Service Type")
         st.bar_chart(df["ServiceType"].value_counts())
-        st.markdown("### Tickets by State")
-        st.bar_chart(df["State"].value_counts())
+        st.markdown("### Tickets by Status")
+        st.bar_chart(df["Status"].value_counts())
+
+with tab_settings:
+    st.subheader("⚙️ Settings")
+    current = ", ".join(blocked_words)
+    new_val = st.text_input("Blocked Words (comma-separated)", value=current)
+    if st.button("💾 Save Blocked Words"):
+        new_list = [w.strip() for w in new_val.split(",") if w.strip()]
+        settings["blocked_words"] = new_list
+        save_settings(settings)
+        st.success(f"✅ Saved blocked words: {', '.join(new_list)}")
+        st.rerun()
+    if st.button("♻️ Reset to Default"):
+        reset_settings()
+        st.success("✅ Settings reset to defaults from config.py")
+        st.rerun()

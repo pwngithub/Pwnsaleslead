@@ -14,3 +14,5 @@ FIELD_ID = {
     "service_type": 18,
     "address": 19
 }
+
+BLOCKED_WORDS = ["test", "demo"]
