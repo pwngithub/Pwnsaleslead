@@ -42,36 +42,22 @@ def fetch_jotform_data():
         })
     return pd.DataFrame(records)
 
-def update_submission(submission_id: str, payload: dict):
-    url = f"{JOTFORM_API}/submission/{submission_id}?apiKey={API_KEY}"
-    form = {}
-    for qid, val in payload.items():
-        if qid == FIELD_ID["address"] and isinstance(val, dict):
-            for subfield, subval in val.items():
-                form[f"q{qid}[{subfield}]"] = subval
-        else:
-            if val is not None:
-                form[f"q{qid}"] = val
-    resp = requests.post(url, data=form, timeout=30)
-    ok = resp.status_code == 200
-    return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
-
 def add_submission(payload: dict):
     form = {}
     for qid, val in payload.items():
         if qid == FIELD_ID["address"] and isinstance(val, dict):
             for subfield, subval in val.items():
-                form[f"q{qid}[{subfield}]"] = subval
+                form[f"submission[{qid}][{subfield}]"] = subval
         else:
             if val is not None:
-                form[f"q{qid}"] = val
+                form[f"submission[{qid}]"] = val
     url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apiKey={API_KEY}"
     resp = requests.post(url, data=form, timeout=30)
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.3", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.3 — Add Ticket Address Fix")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.4", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.4 — Correct Submission Format")
 
 df = fetch_jotform_data()
 if df.empty:
@@ -138,46 +124,10 @@ with tab_add:
         else:
             st.error("❌ Failed to add ticket."); st.write(resp)
 
-# Edit Ticket
+# Edit Ticket (not fully supported by JotForm API for answers)
 with tab_edit:
-    st.subheader("Edit Ticket")
-    if not df.empty:
-        df["label"] = df.apply(lambda r: f"{r['Name']} — {r['Status']} — {r['SubmissionID']}", axis=1)
-        sel = st.selectbox("Select Ticket", df["label"].tolist(), key="edit_select")
-        if sel:
-            curr = df[df["label"]==sel].iloc[0]
-            new_status = st.selectbox("Status", STATUS_LIST, 
-                                      index=STATUS_LIST.index(curr["Status"]) if curr["Status"] in STATUS_LIST else 0,
-                                      key="edit_status")
-            new_service = st.selectbox("Service Type", SERVICE_TYPES, 
-                                       index=SERVICE_TYPES.index(curr["ServiceType"]) if curr["ServiceType"] in SERVICE_TYPES else 0,
-                                       key="edit_service_type")
-            st.markdown("**Address**")
-            new_street = st.text_input("Street", value=curr["Street"] or "", key="edit_addr1")
-            new_street2 = st.text_input("Street 2", value=curr["Street2"] or "", key="edit_addr2")
-            new_city = st.text_input("City", value=curr["City"] or "", key="edit_city")
-            new_state = st.text_input("State", value=curr["State"] or "", key="edit_state")
-            new_postal = st.text_input("Postal Code", value=curr["Postal"] or "", key="edit_postal")
-
-            if st.button("💾 Save Changes", key="edit_save_btn"):
-                payload = {
-                    FIELD_ID["status"]: new_status,
-                    FIELD_ID["service_type"]: new_service,
-                    FIELD_ID["address"]: {
-                        "addr_line1": new_street,
-                        "addr_line2": new_street2,
-                        "city": new_city,
-                        "state": new_state,
-                        "postal": new_postal
-                    }
-                }
-                ok, resp = update_submission(curr["SubmissionID"], payload)
-                if ok:
-                    st.success("✅ Ticket updated.")
-                    st.json(resp)
-                    st.rerun()
-                else:
-                    st.error("❌ Failed to update."); st.write(resp)
+    st.subheader("Edit Ticket (Limited Support)")
+    st.info("JotForm API does not fully support editing submission answers. You may need to re-create tickets.")
 
 # KPI Dashboard
 with tab_kpi:
