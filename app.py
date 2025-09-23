@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import requests
-from datetime import date
 from config import API_KEY, FORM_ID, FIELD_ID
 
 JOTFORM_API = "https://api.jotform.com"
@@ -47,8 +46,8 @@ def add_submission(payload: dict):
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.7", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.7 — Service Type Integration")
+st.set_page_config(page_title="Sales Lead Tracker v19.7.1", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.7.1 — Unique Keys Fix")
 
 df = fetch_jotform_data()
 if df.empty:
@@ -61,12 +60,12 @@ tab_add, tab_edit, tab_kpi = st.tabs(["➕ Add Ticket", "✏️ Edit Ticket", "�
 # Add Ticket
 with tab_add:
     st.subheader("Add Ticket")
-    name = st.text_input("Name")
-    source = st.selectbox("Source", SOURCE_LIST)
-    status = st.selectbox("Status", STATUS_LIST)
-    service_type = st.selectbox("Service Type", SERVICE_TYPES)
+    name = st.text_input("Name", key="add_name")
+    source = st.selectbox("Source", SOURCE_LIST, key="add_source")
+    status = st.selectbox("Status", STATUS_LIST, key="add_status")
+    service_type = st.selectbox("Service Type", SERVICE_TYPES, key="add_service_type")
 
-    if st.button("💾 Save New Ticket"):
+    if st.button("💾 Save New Ticket", key="add_save_btn"):
         payload = {
             str(FIELD_ID["name"]): name,
             str(FIELD_ID["source"]): source,
@@ -84,12 +83,16 @@ with tab_edit:
     st.subheader("Edit Ticket")
     if not df.empty:
         df["label"] = df.apply(lambda r: f"{r['Name']} — {r['Status']} — {r['SubmissionID']}", axis=1)
-        sel = st.selectbox("Select Ticket", df["label"].tolist())
+        sel = st.selectbox("Select Ticket", df["label"].tolist(), key="edit_select")
         if sel:
             curr = df[df["label"]==sel].iloc[0]
-            new_status = st.selectbox("Status", STATUS_LIST, index=STATUS_LIST.index(curr["Status"]) if curr["Status"] in STATUS_LIST else 0)
-            new_service = st.selectbox("Service Type", SERVICE_TYPES, index=SERVICE_TYPES.index(curr["ServiceType"]) if curr["ServiceType"] in SERVICE_TYPES else 0)
-            if st.button("💾 Save Changes"):
+            new_status = st.selectbox("Status", STATUS_LIST, 
+                                      index=STATUS_LIST.index(curr["Status"]) if curr["Status"] in STATUS_LIST else 0,
+                                      key="edit_status")
+            new_service = st.selectbox("Service Type", SERVICE_TYPES, 
+                                       index=SERVICE_TYPES.index(curr["ServiceType"]) if curr["ServiceType"] in SERVICE_TYPES else 0,
+                                       key="edit_service_type")
+            if st.button("💾 Save Changes", key="edit_save_btn"):
                 payload = {
                     str(FIELD_ID["status"]): new_status,
                     str(FIELD_ID["service_type"]): new_service
