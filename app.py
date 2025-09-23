@@ -85,8 +85,8 @@ def add_submission(payload: dict):
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.6", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.6 — Lost Reason + Full KPIs")
+st.set_page_config(page_title="Sales Lead Tracker v19.6.2", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.6.2 — Lost Reason + Fixes")
 
 # Sidebar
 refresh_interval = st.sidebar.selectbox("Auto-refresh interval",[30,60,120,300],index=1, key="refresh_sel")
@@ -103,7 +103,7 @@ if df_raw.empty:
 
 df = enrich(df_raw)
 
-# Filters for KPI tab
+# KPI Filters
 st.sidebar.header("KPI Filters")
 status_unique = sorted([s for s in df["Status"].dropna().unique().tolist()])
 source_unique = sorted([s for s in df["Source"].dropna().unique().tolist()])
@@ -116,17 +116,16 @@ if sla_only:
     breach_mask = (filtered["SurveySLA"].eq("❌") | filtered["SchedulingSLA"].eq("❌") | filtered["InstallSLA"].eq("❌"))
     filtered = filtered[breach_mask]
 
-# Tabs: Add | Edit | KPI
+# Tabs
 tab_add, tab_edit, tab_kpi = st.tabs(["➕ Add Ticket", "✏️ Edit Ticket", "📊 KPI Dashboard"])
 
-# ---------- Add Ticket ----------
+# Add Ticket
 with tab_add:
     st.subheader("Add a New Ticket")
     name = st.text_input("Name", key="add_name")
     source = st.selectbox("Source", SOURCE_LIST, key="add_source")
     status = st.selectbox("Status", STATUS_LIST, key="add_status")
 
-    # dynamic field per status
     if status == "Lost":
         lost_reason = st.text_input("Lost Reason", key="add_lost_reason")
         if st.button("💾 Save New Ticket", key="add_save"):
@@ -138,13 +137,10 @@ with tab_add:
             }
             ok, resp = add_submission(payload)
             if ok:
-                st.success("✅ Ticket added.")
-                st.json(resp)
-                st.experimental_rerun()
+                st.success("✅ Ticket added."); st.json(resp); st.experimental_rerun()
             else:
                 st.error("❌ Failed to add ticket."); st.write(resp)
     else:
-        # show only the relevant date field and default to today
         field_key = STATUS_TO_FIELD_KEY[status]
         date_label = f"{status} Date"
         chosen_date = st.date_input(date_label, value=date.today(), key=f"add_date_{field_key}")
@@ -157,13 +153,11 @@ with tab_add:
             }
             ok, resp = add_submission(payload)
             if ok:
-                st.success("✅ Ticket added.")
-                st.json(resp)
-                st.experimental_rerun()
+                st.success("✅ Ticket added."); st.json(resp); st.experimental_rerun()
             else:
                 st.error("❌ Failed to add ticket."); st.write(resp)
 
-# ---------- Edit Ticket ----------
+# Edit Ticket
 with tab_edit:
     st.subheader("Edit an Existing Ticket")
     options = df[["SubmissionID","Name","Status","SurveyScheduledDate","SurveyCompletedDate","ScheduledDate","InstalledDate","WaitingOnCustomerDate","LostReason",
@@ -175,7 +169,6 @@ with tab_edit:
         sid = row["SubmissionID"]
         curr = df[df["SubmissionID"] == sid].iloc[0]
 
-        # History table
         hist = pd.DataFrame({
             "Status": ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer","Lost"],
             "Date/Reason": [
@@ -189,13 +182,12 @@ with tab_edit:
         })
         st.dataframe(hist, use_container_width=True)
 
-        # Change form
         new_status = st.selectbox("Edit Status", STATUS_LIST,
                                   index=STATUS_LIST.index(curr["Status"]) if pd.notna(curr["Status"]) and curr["Status"] in STATUS_LIST else 0,
                                   key="edit_status")
 
         if new_status == "Lost":
-            new_reason = st.text_input("Lost Reason", value=curr.get("LostReason","") if isinstance(curr.get("LostReason",""), str) else "", key="edit_lost_reason")
+            new_reason = st.text_input("Lost Reason", value=(curr["LostReason"] or ""), key="edit_lost_reason")
             if st.button("💾 Save Changes", key="edit_save"):
                 payload = {
                     str(FIELD_ID["status"]): new_status,
@@ -209,7 +201,6 @@ with tab_edit:
         else:
             field_key2 = STATUS_TO_FIELD_KEY[new_status]
             date_label2 = f"{new_status} Date"
-            # pick existing if present, else today
             existing = curr[
                 "SurveyScheduledDate" if field_key2=="survey_scheduled" else
                 "SurveyCompletedDate" if field_key2=="survey_completed" else
@@ -230,48 +221,46 @@ with tab_edit:
                 else:
                     st.error("❌ Update failed."); st.write(resp_json)
 
-# ---------- KPI Dashboard ----------
+# KPI Dashboard
 with tab_kpi:
     st.subheader("📊 KPI Dashboard (Filtered)")
-    # SLA Banner
-    breach_mask_all = (df["SurveySLA"].eq("❌") | df["SchedulingSLA"].eq("❌") | df["InstallSLA"].eq("❌"))
-    breach_count_all = int(breach_mask_all.sum()); st.write(f"🚨 SLA Breaches: {breach_count_all}")
 
     # Status Overview
     status_counts = filtered["Status"].value_counts().reindex(STATUS_LIST, fill_value=0)
     st.bar_chart(status_counts)
 
-    # KPI metrics
+    # Install metrics
     installs = filtered.dropna(subset=["TotalDaysToInstall"])
-    col1,col2,col3,col4,col5 = st.columns(5)
+    col1,col2,col3,col4 = st.columns(4)
     if not installs.empty:
         col1.metric("Avg Days to Install",f"{installs['TotalDaysToInstall'].mean():.1f}")
         col2.metric("Median Days",f"{installs['TotalDaysToInstall'].median():.0f}")
         col3.metric("Fastest",f"{installs['TotalDaysToInstall'].min():.0f}")
         col4.metric("Slowest",f"{installs['TotalDaysToInstall'].max():.0f}")
-    breaches = (filtered["SurveySLA"].eq("❌")|filtered["SchedulingSLA"].eq("❌")|filtered["InstallSLA"].eq("❌")).sum()
-    total=len(filtered); rate=100*(total-breaches)/total if total else 0
-    col5.metric("SLA Compliance",f"{rate:.1f}%")
 
-    # Source analytics
+    # Source analytics (FIXED Conversion% calc)
     st.markdown("### Source Analytics")
-    by_src = filtered.groupby("Source").agg(
+    by_src = filtered.groupby("Source", dropna=False).agg(
         Leads=("SubmissionID","count"),
-        Installed=("InstalledDate", lambda s: s.notna().sum()),
+        Installed=("InstalledDate", lambda s: pd.Series(s).notna().sum()),
         AvgInstallDays=("TotalDaysToInstall", "mean"),
     ).reset_index()
-    by_src["Conversion%"] = (100*by_src["Installed"]/by_src["Leads"]).round(1)
+
+    by_src["Installed"] = pd.to_numeric(by_src["Installed"], errors="coerce").fillna(0).astype(int)
+    by_src["Leads"] = pd.to_numeric(by_src["Leads"], errors="coerce").fillna(0).astype(int)
+    # Avoid div by zero
+    by_src["Conversion%"] = by_src.apply(lambda r: round(100*r["Installed"]/r["Leads"],1) if r["Leads"]>0 else 0.0, axis=1)
+
     st.dataframe(by_src, use_container_width=True)
 
     # Lost analytics
     st.markdown("### Lost Leads")
-    lost = filtered[filtered["Status"]=="Lost"]
-    c1,c2,c3 = st.columns(3)
-    c1.metric("Total Lost", len(lost))
+    lost = filtered[filtered["Status"]=="Lost"].copy()
+    c1,c2 = st.columns(2)
+    c1.metric("Total Lost", int(len(lost)))
     if not lost.empty:
-        lost_by_source = lost["Source"].value_counts().reset_index()
-        lost_by_source.columns = ["Source","Lost"]
-        st.bar_chart(lost_by_source.set_index("Source"))
+        lost_by_source = lost.groupby("Source", dropna=False)["SubmissionID"].count().rename("Lost").reset_index()
+        c2.bar_chart(lost_by_source.set_index("Source"))
 
         reasons = lost["LostReason"].fillna("Unspecified").value_counts()
         fig = px.pie(values=reasons.values, names=reasons.index, title="Lost Reasons")
@@ -282,5 +271,7 @@ with tab_kpi:
 
     # Table
     show_cols = ["SubmissionID","Name","Source","Status","LostReason","SurveyDuration","SurveySLA","SchedulingDuration","SchedulingSLA","InstallWaitDuration","InstallSLA","TotalDaysToInstall"]
-    styled = filtered[show_cols].style.applymap(color_sla, subset=["SurveySLA","SchedulingSLA","InstallSLA"])
+    # Some columns may be missing if empty; guard
+    show_cols = [c for c in show_cols if c in filtered.columns]
+    styled = filtered[show_cols].style.applymap(color_sla, subset=[c for c in ["SurveySLA","SchedulingSLA","InstallSLA"] if c in filtered.columns])
     st.dataframe(styled, use_container_width=True)
