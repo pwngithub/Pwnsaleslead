@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -10,6 +11,14 @@ SLA_LIMITS = {"Survey":3,"Scheduling":3,"Install Wait":3}
 JOTFORM_API = "https://api.jotform.com"
 STATUS_LIST = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"]
 SOURCE_LIST = ["Email","Social Media","Phone Call","Walk-in","In Person"]
+
+STATUS_TO_FIELD_KEY = {
+    "Survey Scheduled": "survey_scheduled",
+    "Survey Completed": "survey_completed",
+    "Scheduled": "scheduled",
+    "Installed": "installed",
+    "Waiting on Customer": "waiting_on_customer",
+}
 
 # ---------- Data helpers ----------
 def fetch_jotform_data():
@@ -84,8 +93,8 @@ def add_submission(payload: dict):
     return ok, resp.json() if ok else {"status_code": resp.status_code, "text": resp.text}
 
 # ---------- Page ----------
-st.set_page_config(page_title="Sales Lead Tracker v19.3.1", page_icon="🗂️", layout="wide")
-st.title("🗂️ Sales Lead Tracker v19.3.1 — Ticket Actions + KPI Dashboard")
+st.set_page_config(page_title="Sales Lead Tracker v19.4", page_icon="🗂️", layout="wide")
+st.title("🗂️ Sales Lead Tracker v19.4 — Dynamic Dates + History Timeline")
 
 # Sidebar controls
 refresh_interval = st.sidebar.selectbox("Auto-refresh interval",[30,60,120,300],index=1, key="refresh_sel")
@@ -120,27 +129,32 @@ if sla_only:
 # ---------- Tabs ----------
 tab_add, tab_edit, tab_kpi = st.tabs(["➕ Add Ticket", "✏️ Edit Ticket", "📊 KPI Dashboard"])
 
+# ===== Add Ticket =====
 with tab_add:
     st.subheader("Add a New Ticket")
     name = st.text_input("Name", key="add_name")
     source = st.selectbox("Source", SOURCE_LIST, key="add_source")
     status = st.selectbox("Status", STATUS_LIST, key="add_status")
-    col1, col2, col3 = st.columns(3)
-    survey_sched = col1.date_input("Survey Scheduled Date", value=None, key="add_survey_sched")
-    survey_comp = col1.date_input("Survey Completed Date", value=None, key="add_survey_comp")
-    scheduled = col2.date_input("Scheduled Date", value=None, key="add_scheduled")
-    installed = col2.date_input("Installed Date", value=None, key="add_installed")
-    waiting_cust = col3.date_input("Waiting on Customer Date", value=None, key="add_waiting")
+
+    # auto-set today's date when status changes
+    if "add_last_status" not in st.session_state:
+        st.session_state.add_last_status = status
+    if status != st.session_state.add_last_status:
+        st.session_state.add_date_value = date.today()
+        st.session_state.add_last_status = status
+
+    # relevant date field only
+    fld_key = STATUS_TO_FIELD_KEY[status]
+    date_label = f"{status} Date"
+    default_date = st.session_state.get("add_date_value", date.today())
+    chosen_date = st.date_input(date_label, value=default_date, key=f"add_date_{fld_key}")
+
     if st.button("💾 Save New Ticket to JotForm", key="add_save"):
         payload = {
             str(FIELD_ID["name"]): name,
             str(FIELD_ID["source"]): source,
             str(FIELD_ID["status"]): status,
-            str(FIELD_ID["survey_scheduled"]): to_str_date(survey_sched) if survey_sched else None,
-            str(FIELD_ID["survey_completed"]): to_str_date(survey_comp) if survey_comp else None,
-            str(FIELD_ID["scheduled"]): to_str_date(scheduled) if scheduled else None,
-            str(FIELD_ID["installed"]): to_str_date(installed) if installed else None,
-            str(FIELD_ID["waiting_on_customer"]): to_str_date(waiting_cust) if waiting_cust else None,
+            str(FIELD_ID[fld_key]): to_str_date(chosen_date),
         }
         ok, resp = add_submission(payload)
         if ok:
@@ -151,32 +165,93 @@ with tab_add:
             st.error("❌ Failed to add ticket.")
             st.write(resp)
 
+# ===== Edit Ticket =====
 with tab_edit:
     st.subheader("Edit an Existing Ticket")
-    options = df[["SubmissionID","Name","Status"]].copy()
+    options = df[["SubmissionID","Name","Status","SurveyScheduledDate","SurveyCompletedDate","ScheduledDate","InstalledDate","WaitingOnCustomerDate",
+                  "SurveySLA","SchedulingSLA","InstallSLA"]].copy()
     options["label"] = options.apply(lambda r: f"{r['Name'] or 'Unknown'} — {r['Status'] or 'Unknown'} — {r['SubmissionID']}", axis=1)
     sel = st.selectbox("Select a ticket", options["label"].tolist(), key="edit_select")
     if sel:
         row = options[options["label"] == sel].iloc[0]
         sid = row["SubmissionID"]
         curr = df[df["SubmissionID"] == sid].iloc[0]
+
+        # ---- Status History Log (Table) ----
+        st.markdown("**Status History** (read-only)")
+        hist = pd.DataFrame({
+            "Status": ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"],
+            "Date": [
+                curr["SurveyScheduledDate"],
+                curr["SurveyCompletedDate"],
+                curr["ScheduledDate"],
+                curr["InstalledDate"],
+                curr["WaitingOnCustomerDate"]
+            ],
+            "SLA Flag": [
+                curr["SurveySLA"],
+                "",  # no SLA on completed directly
+                curr["SchedulingSLA"],
+                curr["InstallSLA"],
+                ""   # none
+            ]
+        })
+        # Highlight current status row
+        def highlight_current(row_):
+            return ["background-color: #e8f4ff" if row_["Status"] == curr["Status"] else "" for _ in row_.index]
+        st.dataframe(hist.style.apply(highlight_current, axis=1), use_container_width=True)
+
+        # ---- Mini Timeline (Gantt) ----
+        segments = []
+        # Survey
+        if pd.notna(curr["SurveyScheduledDate"]) and pd.notna(curr["SurveyCompletedDate"]):
+            segments.append({"Stage":"Survey","Start":curr["SurveyScheduledDate"],"Finish":curr["SurveyCompletedDate"],
+                             "Color":"Late" if curr["SurveySLA"]=="❌" else "On Time"})
+        # Scheduling
+        if pd.notna(curr["SurveyCompletedDate"]) and pd.notna(curr["ScheduledDate"]):
+            segments.append({"Stage":"Scheduling","Start":curr["SurveyCompletedDate"],"Finish":curr["ScheduledDate"],
+                             "Color":"Late" if curr["SchedulingSLA"]=="❌" else "On Time"})
+        # Install Wait
+        if pd.notna(curr["ScheduledDate"]) and pd.notna(curr["InstalledDate"]):
+            segments.append({"Stage":"Install Wait","Start":curr["ScheduledDate"],"Finish":curr["InstalledDate"],
+                             "Color":"Late" if curr["InstallSLA"]=="❌" else "On Time"})
+        if segments:
+            segdf = pd.DataFrame(segments)
+            fig = px.timeline(segdf, x_start="Start", x_end="Finish", y="Stage", color="Color",
+                              color_discrete_map={"On Time":"green","Late":"red"})
+            fig.update_yaxes(autorange="reversed")
+            st.plotly_chart(fig, use_container_width=True)
+
+        # ---- Change Status (only relevant date) ----
+        st.markdown("---")
+        st.subheader("Change Status")
         new_status = st.selectbox("Edit Status", STATUS_LIST,
             index=STATUS_LIST.index(curr["Status"]) if pd.notna(curr["Status"]) and curr["Status"] in STATUS_LIST else 0,
             key="edit_status")
-        colA, colB, colC = st.columns(3)
-        survey_sched = colA.date_input("Survey Scheduled Date", value=(pd.to_datetime(curr["SurveyScheduledDate"]).date() if pd.notna(curr["SurveyScheduledDate"]) else date.today()), key="edit_survey_sched")
-        survey_comp  = colA.date_input("Survey Completed Date", value=(pd.to_datetime(curr["SurveyCompletedDate"]).date() if pd.notna(curr["SurveyCompletedDate"]) else date.today()), key="edit_survey_comp")
-        scheduled    = colB.date_input("Scheduled Date", value=(pd.to_datetime(curr["ScheduledDate"]).date() if pd.notna(curr["ScheduledDate"]) else date.today()), key="edit_scheduled")
-        installed    = colB.date_input("Installed Date", value=(pd.to_datetime(curr["InstalledDate"]).date() if pd.notna(curr["InstalledDate"]) else date.today()), key="edit_installed")
-        waiting_cust = colC.date_input("Waiting on Customer Date", value=(pd.to_datetime(curr["WaitingOnCustomerDate"]).date() if pd.notna(curr["WaitingOnCustomerDate"]) else date.today()), key="edit_waiting")
+
+        # auto set date when status changes
+        if "edit_last_status" not in st.session_state:
+            st.session_state.edit_last_status = new_status
+        if new_status != st.session_state.edit_last_status:
+            st.session_state.edit_date_value = date.today()
+            st.session_state.edit_last_status = new_status
+
+        fld_key2 = STATUS_TO_FIELD_KEY[new_status]
+        date_label2 = f"{new_status} Date"
+        existing_date = curr[
+            "SurveyScheduledDate" if fld_key2=="survey_scheduled" else
+            "SurveyCompletedDate" if fld_key2=="survey_completed" else
+            "ScheduledDate" if fld_key2=="scheduled" else
+            "InstalledDate" if fld_key2=="installed" else
+            "WaitingOnCustomerDate"
+        ]
+        default_edit_date = st.session_state.get("edit_date_value", (pd.to_datetime(existing_date).date() if pd.notna(existing_date) else date.today()))
+        chosen_edit_date = st.date_input(date_label2, value=default_edit_date, key=f"edit_date_{fld_key2}")
+
         if st.button("💾 Save Changes", key="edit_save"):
             payload = {
                 str(FIELD_ID["status"]): new_status,
-                str(FIELD_ID["survey_scheduled"]): to_str_date(survey_sched),
-                str(FIELD_ID["survey_completed"]): to_str_date(survey_comp),
-                str(FIELD_ID["scheduled"]): to_str_date(scheduled),
-                str(FIELD_ID["installed"]): to_str_date(installed),
-                str(FIELD_ID["waiting_on_customer"]): to_str_date(waiting_cust),
+                str(FIELD_ID[fld_key2]): to_str_date(chosen_edit_date),
             }
             ok, resp_json = update_submission(sid, payload)
             if ok:
@@ -187,6 +262,7 @@ with tab_edit:
                 st.error("❌ Failed to update ticket.")
                 st.write(resp_json)
 
+# ===== KPI TAB =====
 with tab_kpi:
     st.subheader("📊 KPI Dashboard (Filtered)")
     # SLA Banner
@@ -196,7 +272,6 @@ with tab_kpi:
         offenders = df.loc[breach_mask_all, ["SubmissionID","Name","Status"]].head(10)
         st.error(f"🚨 {breach_count_all} ticket(s) are breaching SLA right now!", icon="🚨")
         st.dataframe(offenders, use_container_width=True)
-
     # Status Overview
     status_counts = filtered["Status"].value_counts()
     if not status_counts.empty:
@@ -208,7 +283,6 @@ with tab_kpi:
             cols[i].metric(status,f"{count} total",f"{v} late" if v>0 else "On track")
     else:
         st.info("No tickets match filters.")
-
     # KPI Metrics
     installs = filtered.dropna(subset=["TotalDaysToInstall"])
     if not filtered.empty:
@@ -221,14 +295,12 @@ with tab_kpi:
         breaches = (filtered["SurveySLA"].eq("❌")|filtered["SchedulingSLA"].eq("❌")|filtered["InstallSLA"].eq("❌")).sum()
         total=len(filtered); rate=100*(total-breaches)/total if total else 0
         col5.metric("SLA Compliance",f"{rate:.1f}%")
-
     # Average Duration
     if not filtered.empty:
         c1, c2, c3 = st.columns(3)
         c1.metric("Survey Avg (days)", f"{filtered['SurveyDuration'].dropna().mean():.1f}" if filtered['SurveyDuration'].notna().any() else "—")
         c2.metric("Scheduling Avg (days)", f"{filtered['SchedulingDuration'].dropna().mean():.1f}" if filtered['SchedulingDuration'].notna().any() else "—")
         c3.metric("Install Wait Avg (days)", f"{filtered['InstallWaitDuration'].dropna().mean():.1f}" if filtered['InstallWaitDuration'].notna().any() else "—")
-
     # Funnel
     if not filtered.empty:
         stage_order = STATUS_LIST
@@ -236,22 +308,24 @@ with tab_kpi:
         funnel_df = pd.DataFrame({"Stage":funnel_data.index,"Count":funnel_data.values})
         fig_funnel = px.funnel(funnel_df,x="Count",y="Stage")
         st.plotly_chart(fig_funnel,use_container_width=True)
-
     # Timelines
     segments=[]
     for _,r in filtered.iterrows():
         if pd.notna(r["SurveyScheduledDate"]) and pd.notna(r["SurveyCompletedDate"]):
-            segments.append({"Lead":r["Name"],"Stage":"Survey","Start":r["SurveyScheduledDate"],"Finish":r["SurveyCompletedDate"],"Color":"red" if r["SurveySLA"]=="❌" else "green"})
+            segments.append({"Lead":r["Name"],"Stage":"Survey","Start":r["SurveyScheduledDate"],"Finish":r["SurveyCompletedDate"],
+                             "Color":"Late" if r["SurveySLA"]=="❌" else "On Time"})
         if pd.notna(r["SurveyCompletedDate"]) and pd.notna(r["ScheduledDate"]):
-            segments.append({"Lead":r["Name"],"Stage":"Scheduling","Start":r["SurveyCompletedDate"],"Finish":r["ScheduledDate"],"Color":"red" if r["SchedulingSLA"]=="❌" else "green"})
+            segments.append({"Lead":r["Name"],"Stage":"Scheduling","Start":r["SurveyCompletedDate"],"Finish":r["ScheduledDate"],
+                             "Color":"Late" if r["SchedulingSLA"]=="❌" else "On Time"})
         if pd.notna(r["ScheduledDate"]) and pd.notna(r["InstalledDate"]):
-            segments.append({"Lead":r["Name"],"Stage":"Install Wait","Start":r["ScheduledDate"],"Finish":r["InstalledDate"],"Color":"red" if r["InstallSLA"]=="❌" else "green"})
+            segments.append({"Lead":r["Name"],"Stage":"Install Wait","Start":r["ScheduledDate"],"Finish":r["InstalledDate"],
+                             "Color":"Late" if r["InstallSLA"]=="❌" else "On Time"})
     if segments:
         segdf=pd.DataFrame(segments)
-        fig_tl=px.timeline(segdf,x_start="Start",x_end="Finish",y="Lead",color="Color",facet_row="Stage")
+        fig_tl=px.timeline(segdf,x_start="Start",x_end="Finish",y="Lead",color="Color",
+                           color_discrete_map={"On Time":"green","Late":"red"})
         fig_tl.update_yaxes(autorange="reversed")
         st.plotly_chart(fig_tl,use_container_width=True)
-
     # Table
     if not filtered.empty:
         show=filtered[["SubmissionID","Name","Source","Status","SurveyDuration","SurveySLA","SchedulingDuration","SchedulingSLA","InstallWaitDuration","InstallSLA","TotalDaysToInstall"]]
