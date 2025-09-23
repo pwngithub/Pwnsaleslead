@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import datetime
+import csv, os
 from config import API_KEY, FORM_ID, FIELD_ID
 
 JOTFORM_API = "https://api.jotform.com"
@@ -55,69 +56,52 @@ def fetch_jotform_data():
         })
     return pd.DataFrame(records)
 
-def add_submission(payload: dict):
-    form = {}
-    for qid, val in payload.items():
-        if qid == FIELD_ID["name"] and isinstance(val, str):
-            parts = val.split(" ", 1)
-            form[f"submission[{qid}][first]"] = parts[0]
-            form[f"submission[{qid}][last]"] = parts[1] if len(parts) > 1 else ""
-        elif qid == FIELD_ID["address"] and isinstance(val, dict):
-            for subfield, subval in val.items():
-                form[f"submission[{qid}][{subfield}]"] = subval
-        else:
-            if val is not None:
-                form[f"submission[{qid}]"] = val
-    url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apiKey={API_KEY}"
-    resp = requests.post(url, data=form, timeout=30)
-    ok = resp.status_code == 200
-    return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text, "sent_form": form})
-
-def replace_submission(sub_id, payload: dict):
-    del_url = f"{JOTFORM_API}/submission/{sub_id}?apiKey={API_KEY}"
-    requests.delete(del_url, timeout=30)
-    return add_submission(payload)
-
 def erase_all_submissions():
-    url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apikey={API_KEY}"
-    r = requests.get(url, timeout=30)
-    if r.status_code != 200:
-        return False, f"Failed to fetch submissions: {r.text}"
-    subs = r.json().get("content", [])
-    count = 0
-    for sub in subs:
-        sid = sub.get("id")
-        if sid:
-            del_url = f"{JOTFORM_API}/submission/{sid}?apiKey={API_KEY}"
-            d = requests.delete(del_url, timeout=30)
-            if d.status_code == 200:
-                count += 1
-    return True, count
+    deleted = 0
+    errors = []
+    while True:
+        url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apikey={API_KEY}"
+        r = requests.get(url, timeout=30)
+        if r.status_code != 200:
+            return deleted, [{"id": "fetch", "status": r.status_code, "text": r.text}]
+        subs = r.json().get("content", [])
+        if not subs:
+            break
+        for sub in subs:
+            sid = sub.get("id")
+            if sid:
+                del_url = f"{JOTFORM_API}/submission/{sid}?apiKey={API_KEY}"
+                d = requests.delete(del_url, timeout=30)
+                if d.status_code == 200:
+                    deleted += 1
+                else:
+                    errors.append({"id": sid, "status": d.status_code, "text": d.text})
+    # Save errors to CSV if any
+    if errors:
+        log_file = "erase_log.csv"
+        with open(log_file, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["id","status","text"])
+            writer.writeheader()
+            for e in errors:
+                writer.writerow(e)
+        return deleted, log_file
+    return deleted, None
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.13", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.13 — Erase All Tickets")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.14", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.14 — Strong Erase with Log")
 
 df = fetch_jotform_data()
 if "edit_ticket_id" not in st.session_state:
     st.session_state.edit_ticket_id = None
 
-tab_all, tab_add, tab_edit, tab_kpi = st.tabs(["📋 All Tickets", "➕ Add Ticket", "✏️ Edit Ticket", "📊 KPI Dashboard"])
+tab_all, tab_kpi = st.tabs(["📋 All Tickets", "📊 KPI Dashboard"])
 
 with tab_all:
     st.subheader("All Tickets Preview")
-    for idx, row in df.iterrows():
-        cols = st.columns([3,2,2,2,2,2,2,1])
-        cols[0].write(row["DisplayName"])
-        cols[1].write(row["Source"])
-        cols[2].write(row["Status"])
-        cols[3].write(row["ServiceType"])
-        cols[4].write(row["City"])
-        cols[5].write(row["State"])
-        cols[6].write(row["LostReason"])
-        sid = row["SubmissionID"] if pd.notna(row["SubmissionID"]) else "noid"
-        if cols[7].button("✏️ Edit", key=f"editbtn_{idx}_{sid}"):
-            st.session_state.edit_ticket_id = row["SubmissionID"]
-            st.rerun()
+    if df.empty:
+        st.info("No tickets available.")
+    else:
+        st.dataframe(df[["DisplayName","Source","Status","ServiceType","City","State","LostReason"]])
 
 with tab_kpi:
     st.subheader("📊 KPI Dashboard")
@@ -131,9 +115,11 @@ with tab_kpi:
     st.error("⚠️ Danger Zone: This will erase ALL tickets from JotForm permanently!")
     confirm = st.checkbox("I understand this will erase all tickets permanently")
     if confirm and st.button("🚨 Erase All Tickets"):
-        ok, result = erase_all_submissions()
-        if ok:
-            st.success(f"✅ Successfully erased {result} tickets.")
-            st.rerun()
+        deleted, log_file = erase_all_submissions()
+        if log_file:
+            st.error(f"Deleted {deleted} tickets, but some errors occurred. Download the log below.")
+            with open(log_file, "r") as f:
+                st.download_button("📥 Download Erase Log", f, file_name="erase_log.csv")
         else:
-            st.error(f"❌ Failed: {result}")
+            st.success(f"✅ Successfully erased {deleted} tickets.")
+        st.rerun()
