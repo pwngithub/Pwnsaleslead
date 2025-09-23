@@ -74,8 +74,8 @@ def replace_submission(sub_id, payload: dict):
     requests.delete(del_url, timeout=30)
     return add_submission(payload)
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.8", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.8 — Name-only Edit & Click-to-Edit")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.9", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.9 — st.rerun Fix")
 
 df = fetch_jotform_data()
 if df.empty:
@@ -87,7 +87,6 @@ if "edit_ticket_id" not in st.session_state:
 
 tab_all, tab_add, tab_edit, tab_kpi = st.tabs(["📋 All Tickets", "➕ Add Ticket", "✏️ Edit Ticket", "📊 KPI Dashboard"])
 
-# All Tickets
 with tab_all:
     st.subheader("All Tickets Preview")
     show_cols = ["DisplayName","Source","Status","ServiceType","City","State","LostReason"]
@@ -102,9 +101,8 @@ with tab_all:
         cols[6].write(row["LostReason"])
         if cols[7].button("✏️ Edit", key=f"editbtn_{row['SubmissionID']}"):
             st.session_state.edit_ticket_id = row["SubmissionID"]
-            st.experimental_rerun()
+            st.rerun()
 
-# Add Ticket (same as before)
 with tab_add:
     st.subheader("Add Ticket")
     name = st.text_input("Name (First Last)", key="add_name")
@@ -150,7 +148,6 @@ with tab_add:
         else:
             st.error("❌ Failed to add ticket."); st.write(resp)
 
-# Edit Ticket
 with tab_edit:
     st.subheader("Edit Ticket (Change Status Only)")
     st.warning("⚠️ Editing will delete the old submission and create a new one. Submission ID will change.")
@@ -204,7 +201,6 @@ with tab_edit:
             else:
                 st.error("❌ Failed to update ticket."); st.write(resp)
 
-# KPI Dashboard (unchanged)
 with tab_kpi:
     st.subheader("📊 KPI Dashboard")
     if not df.empty:
