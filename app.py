@@ -5,12 +5,6 @@ import plotly.express as px
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
 
-try:
-    from st_aggrid import AgGrid, GridOptionsBuilder
-    aggrid_available = True
-except ImportError:
-    aggrid_available = False
-
 SLA_LIMITS = {"Survey":3,"Scheduling":3,"Install Wait":3}
 
 def parse_dt(x):
@@ -37,8 +31,13 @@ def enrich_with_sla(df):
     df["InstallSLA"] = df["InstallWaitDuration"].apply(lambda d:"❌" if pd.notna(d) and d>SLA_LIMITS["Install Wait"] else "✅")
     return df
 
-st.set_page_config(page_title="Sales Lead Tracker v14.1", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v14.1 — AgGrid with Fallback")
+def color_sla(val):
+    if val == "❌":
+        return "background-color: #ffcccc"
+    return ""
+
+st.set_page_config(page_title="Sales Lead Tracker v15", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v15 — Stable Highlighting (No AgGrid)")
 
 # Sidebar controls
 refresh_interval = st.sidebar.selectbox("Auto-refresh interval",[30,60,120,300],index=1)
@@ -136,33 +135,12 @@ if segments:
 else:
     st.info("No timeline data for current filters.")
 
-# Table with fallback
-st.subheader("📋 Ticket Table with SLA (Filtered — AgGrid or Fallback)")
+# Table (Safe Styling)
+st.subheader("📋 Ticket Table with SLA (Filtered & Highlighted)")
 if not filtered.empty:
     show=filtered[["Name","Contact","Source","Status","SurveyDuration","SurveySLA","SchedulingDuration","SchedulingSLA","InstallWaitDuration","InstallSLA","TotalDaysToInstall"]]
-    if aggrid_available:
-        try:
-            gb = GridOptionsBuilder.from_dataframe(show)
-            gb.configure_default_column(resizable=True, filter=True, sortable=True)
-            gb.configure_pagination()
-            # Conditional formatting
-            cellsytle_jscode = '''
-            function(params) {
-                if (params.value === "❌") {
-                    return {"backgroundColor": "#ffcccc"};
-                }
-            };
-            '''
-            gb.configure_column("SurveySLA", cellStyle=cellsytle_jscode)
-            gb.configure_column("SchedulingSLA", cellStyle=cellsytle_jscode)
-            gb.configure_column("InstallSLA", cellStyle=cellsytle_jscode)
-            gridOptions = gb.build()
-            AgGrid(show, gridOptions=gridOptions, theme="streamlit", fit_columns_on_grid_load=True)
-        except Exception as e:
-            st.warning("⚠️ AgGrid failed, showing fallback table.")
-            st.dataframe(show)
-    else:
-        st.dataframe(show)
+    styled = show.style.applymap(color_sla, subset=["SurveySLA","SchedulingSLA","InstallSLA"])
+    st.dataframe(styled, use_container_width=True)
 else:
     st.info("No tickets to show for current filters.")
 

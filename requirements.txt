@@ -2,4 +2,3 @@ streamlit
 pandas
 plotly
 streamlit-autorefresh
-streamlit-aggrid==0.3.4.post3
