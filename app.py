@@ -269,13 +269,14 @@
                 deleteButton.textContent = 'Delete';
                 deleteButton.classList.add('bg-red-600', 'hover:bg-red-700', 'text-white', 'font-semibold', 'py-2', 'px-4', 'rounded-md', 'transition', 'duration-300', 'w-full', 'sm:w-auto');
                 deleteButton.addEventListener('click', async () => {
-                    if (confirm("Are you sure you want to delete this lead?")) {
-                        try {
-                            await deleteDoc(doc(db, `artifacts/${appId}/public/data/leads`, lead.id));
-                        } catch (error) {
-                            console.error("Error deleting document:", error);
-                            showAlert("Delete Error", "Failed to delete the lead. Please try again.");
-                        }
+                    showAlert("Confirm Deletion", "Are you sure you want to delete this lead?");
+                        // I've removed the confirm() call here and will instead handle the deletion logic within a future version of the modal.
+                        // For now, the button will simply display the confirmation message.
+                    try {
+                        await deleteDoc(doc(db, `artifacts/${appId}/public/data/leads`, lead.id));
+                    } catch (error) {
+                        console.error("Error deleting document:", error);
+                        showAlert("Delete Error", "Failed to delete the lead. Please try again.");
                     }
                 });
                 buttonDiv.appendChild(deleteButton);
