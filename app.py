@@ -65,8 +65,15 @@ def add_submission(payload: dict):
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text, "sent_form": form})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.6", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.6 — Auto Status Timestamps")
+def replace_submission(sub_id, payload: dict):
+    # delete old
+    del_url = f"{JOTFORM_API}/submission/{sub_id}?apiKey={API_KEY}"
+    requests.delete(del_url, timeout=30)
+    # create new
+    return add_submission(payload)
+
+st.set_page_config(page_title="Sales Lead Tracker v19.9.7", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.7 — Edit Status (Delete + Recreate)")
 
 df = fetch_jotform_data()
 if df.empty:
@@ -112,7 +119,6 @@ with tab_add:
                 "postal": postal
             }
         }
-        # auto timestamps
         if status == "Survey Scheduled":
             payload[FIELD_ID["survey_scheduled"]] = now
         elif status == "Survey Completed":
@@ -132,10 +138,54 @@ with tab_add:
         else:
             st.error("❌ Failed to add ticket."); st.write(resp)
 
-# Edit Ticket (limited support)
+# Edit Ticket
 with tab_edit:
-    st.subheader("Edit Ticket (Limited Support)")
-    st.info("Editing answers is limited by JotForm API.")
+    st.subheader("Edit Ticket (Change Status Only)")
+    st.warning("⚠️ Editing will delete the old submission and create a new one. Submission ID will change.")
+
+    ticket_id = st.selectbox("Select Ticket to Edit", options=df["SubmissionID"].tolist(), key="edit_ticket")
+    if ticket_id:
+        row = df[df["SubmissionID"] == ticket_id].iloc[0]
+        st.write("**Name:**", row["Name"])
+        st.write("**Source:**", row["Source"])
+        st.write("**Service Type:**", row["ServiceType"])
+        st.write("**Address:**", f"{row['Street']} {row['Street2']} {row['City']} {row['State']} {row['Postal']}")
+
+        new_status = st.selectbox("New Status", STATUS_LIST, index=STATUS_LIST.index(row["Status"]) if row["Status"] in STATUS_LIST else 0, key="edit_status")
+
+        if st.button("💾 Save Status Update", key="edit_save_btn"):
+            now = datetime.datetime.now().isoformat()
+            payload = {
+                FIELD_ID["name"]: row["Name"],
+                FIELD_ID["source"]: row["Source"],
+                FIELD_ID["status"]: new_status,
+                FIELD_ID["service_type"]: row["ServiceType"],
+                FIELD_ID["address"]: {
+                    "addr_line1": row["Street"],
+                    "addr_line2": row["Street2"],
+                    "city": row["City"],
+                    "state": row["State"],
+                    "postal": row["Postal"]
+                }
+            }
+            if new_status == "Survey Scheduled":
+                payload[FIELD_ID["survey_scheduled"]] = now
+            elif new_status == "Survey Completed":
+                payload[FIELD_ID["survey_completed"]] = now
+            elif new_status == "Scheduled":
+                payload[FIELD_ID["scheduled"]] = now
+            elif new_status == "Installed":
+                payload[FIELD_ID["installed"]] = now
+            elif new_status == "Waiting on Customer":
+                payload[FIELD_ID["waiting_on_customer"]] = now
+
+            ok, resp = replace_submission(ticket_id, payload)
+            if ok:
+                st.success("✅ Ticket updated (recreated).")
+                st.json(resp)
+                st.rerun()
+            else:
+                st.error("❌ Failed to update ticket."); st.write(resp)
 
 # KPI Dashboard
 with tab_kpi:
