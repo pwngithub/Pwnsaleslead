@@ -53,44 +53,43 @@ def fetch_jotform_data():
             "Postal": addr_raw.get("postal")
         })
     df = pd.DataFrame(records)
-    # Filter out junk rows (where everything is empty)
+    # Drop ghosts explicitly (Unnamed rows)
     if not df.empty:
-        df = df[df[["Name","Source","Status","ServiceType"]].notna().any(axis=1)]
+        df = df[~df["DisplayName"].str.startswith("Unnamed (")]
     return df
 
 def erase_all_submissions():
     deleted = 0
     errors = []
-    while True:
-        url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apikey={API_KEY}"
-        r = requests.get(url, timeout=30)
-        if r.status_code != 200:
-            return deleted, [{"id": "fetch", "status": r.status_code, "text": r.text}]
-        subs = r.json().get("content", [])
-        if not subs:
-            break
-        for sub in subs:
-            sid = sub.get("id")
-            if sid:
-                del_url = f"{JOTFORM_API}/submission/{sid}?apiKey={API_KEY}"
-                d = requests.delete(del_url, timeout=30)
-                if d.status_code == 200:
-                    deleted += 1
-                else:
-                    errors.append({"id": sid, "status": d.status_code, "text": d.text})
-    # Save errors to CSV if any
-    if errors:
-        log_file = "erase_log.csv"
-        with open(log_file, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=["id","status","text"])
-            writer.writeheader()
-            for e in errors:
-                writer.writerow(e)
-        return deleted, log_file
-    return deleted, None
+    log_file = "erase_log.csv"
+    with open(log_file, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["id","status","text"])
+        writer.writeheader()
+        while True:
+            url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apikey={API_KEY}"
+            r = requests.get(url, timeout=30)
+            if r.status_code != 200:
+                errors.append({"id": "fetch", "status": r.status_code, "text": r.text})
+                break
+            subs = r.json().get("content", [])
+            if not subs:
+                break
+            for sub in subs:
+                sid = sub.get("id")
+                if sid:
+                    del_url = f"{JOTFORM_API}/submission/{sid}?apiKey={API_KEY}"
+                    d = requests.delete(del_url, timeout=30)
+                    if d.status_code == 200:
+                        deleted += 1
+                        writer.writerow({"id": sid, "status": 200, "text": "deleted"})
+                    else:
+                        err = {"id": sid, "status": d.status_code, "text": d.text}
+                        errors.append(err)
+                        writer.writerow(err)
+    return deleted, (log_file if errors else None)
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.15", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.15 — Filtered Tickets")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.16", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.16 — Ghost Filter & Full Delete Log")
 
 df = fetch_jotform_data()
 
