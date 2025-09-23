@@ -139,8 +139,9 @@ else:
 st.subheader("📋 Ticket Table with SLA (Filtered & Highlighted)")
 if not filtered.empty:
     show=filtered[["Name","Contact","Source","Status","SurveyDuration","SurveySLA","SchedulingDuration","SchedulingSLA","InstallWaitDuration","InstallSLA","TotalDaysToInstall"]]
-    styled=show.style.apply(highlight_breach,axis=1)
-    st.dataframe(styled,use_container_width=True)
+    styled = show.style.apply(highlight_breach, axis=1)
+st.write(styled)
+
 else:
     st.info("No tickets to show for current filters.")
 
