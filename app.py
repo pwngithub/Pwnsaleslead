@@ -36,8 +36,8 @@ def highlight_breach(row):
         return ["background-color: #ffcccc"]*len(row)
     return [""]*len(row)
 
-st.set_page_config(page_title="Sales Lead Tracker v13", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v13 — Dynamic KPI Updates with Filters")
+st.set_page_config(page_title="Sales Lead Tracker v13.1", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v13.1 — Fixed SLA Highlighting")
 
 # Sidebar controls
 refresh_interval = st.sidebar.selectbox("Auto-refresh interval",[30,60,120,300],index=1)
@@ -139,9 +139,8 @@ else:
 st.subheader("📋 Ticket Table with SLA (Filtered & Highlighted)")
 if not filtered.empty:
     show=filtered[["Name","Contact","Source","Status","SurveyDuration","SurveySLA","SchedulingDuration","SchedulingSLA","InstallWaitDuration","InstallSLA","TotalDaysToInstall"]]
-    styled = show.style.apply(highlight_breach, axis=1)
-st.write(styled)
-
+    styled=show.style.apply(highlight_breach,axis=1)
+    st.write(styled)
 else:
     st.info("No tickets to show for current filters.")
 
