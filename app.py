@@ -177,7 +177,7 @@ with st.expander("View and Manage Leads", expanded=True):
                 st.session_state.leads_df.loc[st.session_state.leads_df['Lead ID'] == lead_id, 'status_history'] = [history_list]
 
         st.success("Leads updated successfully!")
-        st.experimental_rerun()
+        st.rerun()
 
 # --- Lead Status Visualization ---
 st.markdown("---")
@@ -228,7 +228,7 @@ with st.expander("Add a New Lead", expanded=False):
                 }])
                 st.session_state.leads_df = pd.concat([st.session_state.leads_df, new_row], ignore_index=True)
                 st.success("New lead added successfully!")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Please fill out both Name and Company fields.")
 
@@ -237,4 +237,4 @@ st.markdown("---")
 with st.expander("App Actions", expanded=False):
     if st.button("Reset All Data", help="This will delete all leads and reset to the initial sample data."):
         st.session_state.leads_df = get_initial_data()
-        st.experimental_rerun()
+        st.rerun()
