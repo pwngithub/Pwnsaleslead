@@ -74,8 +74,8 @@ def replace_submission(sub_id, payload: dict):
     requests.delete(del_url, timeout=30)
     return add_submission(payload)
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.9", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.9 — st.rerun Fix")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.10", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.10 — Unique Button Keys Fix")
 
 df = fetch_jotform_data()
 if df.empty:
@@ -89,7 +89,6 @@ tab_all, tab_add, tab_edit, tab_kpi = st.tabs(["📋 All Tickets", "➕ Add Tick
 
 with tab_all:
     st.subheader("All Tickets Preview")
-    show_cols = ["DisplayName","Source","Status","ServiceType","City","State","LostReason"]
     for idx, row in df.iterrows():
         cols = st.columns([3,2,2,2,2,2,2,1])
         cols[0].write(row["DisplayName"])
@@ -99,7 +98,8 @@ with tab_all:
         cols[4].write(row["City"])
         cols[5].write(row["State"])
         cols[6].write(row["LostReason"])
-        if cols[7].button("✏️ Edit", key=f"editbtn_{row['SubmissionID']}"):
+        sid = row["SubmissionID"] if pd.notna(row["SubmissionID"]) else "noid"
+        if cols[7].button("✏️ Edit", key=f"editbtn_{idx}_{sid}"):
             st.session_state.edit_ticket_id = row["SubmissionID"]
             st.rerun()
 
