@@ -2,8 +2,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime, timezone
+from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
+from st_aggrid import AgGrid, GridOptionsBuilder
 
 SLA_LIMITS = {"Survey":3,"Scheduling":3,"Install Wait":3}
 
@@ -31,13 +32,8 @@ def enrich_with_sla(df):
     df["InstallSLA"] = df["InstallWaitDuration"].apply(lambda d:"❌" if pd.notna(d) and d>SLA_LIMITS["Install Wait"] else "✅")
     return df
 
-def highlight_breach(row):
-    if "❌" in row.values:
-        return ["background-color: #ffcccc"]*len(row)
-    return [""]*len(row)
-
-st.set_page_config(page_title="Sales Lead Tracker v13.1", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v13.1 — Fixed SLA Highlighting")
+st.set_page_config(page_title="Sales Lead Tracker v14", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v14 — Ag-Grid SLA Highlighting")
 
 # Sidebar controls
 refresh_interval = st.sidebar.selectbox("Auto-refresh interval",[30,60,120,300],index=1)
@@ -135,12 +131,26 @@ if segments:
 else:
     st.info("No timeline data for current filters.")
 
-# Table
-st.subheader("📋 Ticket Table with SLA (Filtered & Highlighted)")
+# Table with AgGrid
+st.subheader("📋 Ticket Table with SLA (Filtered & Highlighted in AgGrid)")
 if not filtered.empty:
     show=filtered[["Name","Contact","Source","Status","SurveyDuration","SurveySLA","SchedulingDuration","SchedulingSLA","InstallWaitDuration","InstallSLA","TotalDaysToInstall"]]
-    styled=show.style.apply(highlight_breach,axis=1)
-    st.write(styled)
+    gb = GridOptionsBuilder.from_dataframe(show)
+    gb.configure_default_column(resizable=True, filter=True, sortable=True)
+    gb.configure_pagination()
+    # Conditional formatting for SLA columns
+    cellsytle_jscode = '''
+    function(params) {
+        if (params.value === "❌") {
+            return {"backgroundColor": "#ffcccc"};
+        }
+    };
+    '''
+    gb.configure_column("SurveySLA", cellStyle=cellsytle_jscode)
+    gb.configure_column("SchedulingSLA", cellStyle=cellsytle_jscode)
+    gb.configure_column("InstallSLA", cellStyle=cellsytle_jscode)
+    gridOptions = gb.build()
+    AgGrid(show, gridOptions=gridOptions, theme="streamlit", fit_columns_on_grid_load=True)
 else:
     st.info("No tickets to show for current filters.")
 
