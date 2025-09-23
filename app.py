@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timezone
+from streamlit_autorefresh import st_autorefresh
 
 SLA_LIMITS = {
     "Survey": 3,
@@ -34,8 +35,12 @@ def enrich_with_sla(df):
     df["InstallSLA"] = df["InstallWaitDuration"].apply(lambda d: "❌" if pd.notna(d) and d>SLA_LIMITS["Install Wait"] else "✅")
     return df
 
-st.set_page_config(page_title="Sales Lead Tracker v7", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v7 — Status First Dashboard")
+st.set_page_config(page_title="Sales Lead Tracker v9", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v9 — Auto-Refreshing SLA Dashboard")
+
+# Sidebar: refresh interval
+refresh_interval = st.sidebar.selectbox("Auto-refresh interval", [30, 60, 120, 300], index=1)
+st_autorefresh(interval=refresh_interval*1000, key="auto_refresh")
 
 # Load sample tickets
 df = pd.read_csv("sample_tickets.csv")
@@ -46,7 +51,7 @@ st.subheader("🔎 Status Overview")
 status_counts = df["Status"].value_counts()
 violations = {
     "Survey Scheduled": (df["SurveySLA"]=="❌").sum(),
-    "Survey Completed": 0, # no SLA here
+    "Survey Completed": 0,
     "Scheduled": (df["SchedulingSLA"]=="❌").sum(),
     "Installed": (df["InstallSLA"]=="❌").sum(),
     "Waiting on Customer": 0,
@@ -70,7 +75,35 @@ if not installs.empty:
     rate = 100*(total-breaches)/total if total else 0
     col5.metric("SLA Compliance", f"{rate:.1f}%")
 
+# Funnel Chart
+st.subheader("🔻 Funnel View")
+stage_order = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"]
+funnel_data = df["Status"].value_counts().reindex(stage_order, fill_value=0)
+fig_funnel = px.funnel(funnel_data.reset_index(), x="Status", y="index", labels={"index":"Stage","Status":"Count"})
+st.plotly_chart(fig_funnel, use_container_width=True)
+
+# Timeline Bars
+st.subheader("🧭 SLA Timelines")
+segments = []
+for _,r in df.iterrows():
+    if pd.notna(r["SurveyScheduledDate"]) and pd.notna(r["SurveyCompletedDate"]):
+        segments.append({"Lead":r["Name"],"Stage":"Survey","Start":r["SurveyScheduledDate"],"Finish":r["SurveyCompletedDate"],"Color":"red" if r["SurveySLA"]=="❌" else "green"})
+    if pd.notna(r["SurveyCompletedDate"]) and pd.notna(r["ScheduledDate"]):
+        segments.append({"Lead":r["Name"],"Stage":"Scheduling","Start":r["SurveyCompletedDate"],"Finish":r["ScheduledDate"],"Color":"red" if r["SchedulingSLA"]=="❌" else "green"})
+    if pd.notna(r["ScheduledDate"]) and pd.notna(r["InstalledDate"]):
+        segments.append({"Lead":r["Name"],"Stage":"Install Wait","Start":r["ScheduledDate"],"Finish":r["InstalledDate"],"Color":"red" if r["InstallSLA"]=="❌" else "green"})
+if segments:
+    segdf = pd.DataFrame(segments)
+    fig_tl = px.timeline(segdf, x_start="Start", x_end="Finish", y="Lead", color="Color", facet_row="Stage")
+    fig_tl.update_yaxes(autorange="reversed")
+    st.plotly_chart(fig_tl, use_container_width=True)
+else:
+    st.info("No timeline data available.")
+
 # Ticket Table
 st.subheader("📋 Ticket Table with SLA")
 show = df[["Name","Contact","Status","SurveyDuration","SurveySLA","SchedulingDuration","SchedulingSLA","InstallWaitDuration","InstallSLA","TotalDaysToInstall"]]
 st.dataframe(show, use_container_width=True)
+
+# Footer
+st.caption(f"🔄 Auto-refresh every {refresh_interval} seconds. Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
