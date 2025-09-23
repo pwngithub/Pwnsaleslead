@@ -10,5 +10,6 @@ FIELD_ID = {
     "scheduled": 14,
     "installed": 15,
     "waiting_on_customer": 16,
-    "lost_reason": 17
+    "lost_reason": 17,
+    "service_type": 18
 }
