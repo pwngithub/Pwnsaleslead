@@ -22,13 +22,19 @@ def fetch_jotform_data():
     records = []
     for sub in subs:
         ans = sub.get("answers", {})
+        addr_ans = ans.get(str(FIELD_ID["address"]), {}).get("answer", {})
         records.append({
             "SubmissionID": sub.get("id"),
             "Name": ans.get(str(FIELD_ID["name"]), {}).get("answer"),
             "Source": ans.get(str(FIELD_ID["source"]), {}).get("answer"),
             "Status": ans.get(str(FIELD_ID["status"]), {}).get("answer"),
             "ServiceType": ans.get(str(FIELD_ID["service_type"]), {}).get("answer"),
-            "LostReason": ans.get(str(FIELD_ID["lost_reason"]), {}).get("answer")
+            "LostReason": ans.get(str(FIELD_ID["lost_reason"]), {}).get("answer"),
+            "Street": addr_ans.get("addr_line1"),
+            "Street2": addr_ans.get("addr_line2"),
+            "City": addr_ans.get("city"),
+            "State": addr_ans.get("state"),
+            "Postal": addr_ans.get("postal")
         })
     return pd.DataFrame(records)
 
@@ -46,8 +52,8 @@ def add_submission(payload: dict):
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.7.1", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.7.1 — Unique Keys Fix")
+st.set_page_config(page_title="Sales Lead Tracker v19.8", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.8 — Address Support")
 
 df = fetch_jotform_data()
 if df.empty:
@@ -65,12 +71,26 @@ with tab_add:
     status = st.selectbox("Status", STATUS_LIST, key="add_status")
     service_type = st.selectbox("Service Type", SERVICE_TYPES, key="add_service_type")
 
+    st.markdown("**Address**")
+    street = st.text_input("Street", key="add_addr1")
+    street2 = st.text_input("Street 2", key="add_addr2")
+    city = st.text_input("City", key="add_city")
+    state = st.text_input("State", key="add_state")
+    postal = st.text_input("Postal Code", key="add_postal")
+
     if st.button("💾 Save New Ticket", key="add_save_btn"):
         payload = {
             str(FIELD_ID["name"]): name,
             str(FIELD_ID["source"]): source,
             str(FIELD_ID["status"]): status,
-            str(FIELD_ID["service_type"]): service_type
+            str(FIELD_ID["service_type"]): service_type,
+            str(FIELD_ID["address"]): {
+                "addr_line1": street,
+                "addr_line2": street2,
+                "city": city,
+                "state": state,
+                "postal": postal
+            }
         }
         ok, resp = add_submission(payload)
         if ok:
@@ -92,10 +112,24 @@ with tab_edit:
             new_service = st.selectbox("Service Type", SERVICE_TYPES, 
                                        index=SERVICE_TYPES.index(curr["ServiceType"]) if curr["ServiceType"] in SERVICE_TYPES else 0,
                                        key="edit_service_type")
+            st.markdown("**Address**")
+            new_street = st.text_input("Street", value=curr["Street"] or "", key="edit_addr1")
+            new_street2 = st.text_input("Street 2", value=curr["Street2"] or "", key="edit_addr2")
+            new_city = st.text_input("City", value=curr["City"] or "", key="edit_city")
+            new_state = st.text_input("State", value=curr["State"] or "", key="edit_state")
+            new_postal = st.text_input("Postal Code", value=curr["Postal"] or "", key="edit_postal")
+
             if st.button("💾 Save Changes", key="edit_save_btn"):
                 payload = {
                     str(FIELD_ID["status"]): new_status,
-                    str(FIELD_ID["service_type"]): new_service
+                    str(FIELD_ID["service_type"]): new_service,
+                    str(FIELD_ID["address"]): {
+                        "addr_line1": new_street,
+                        "addr_line2": new_street2,
+                        "city": new_city,
+                        "state": new_state,
+                        "postal": new_postal
+                    }
                 }
                 ok, resp = update_submission(curr["SubmissionID"], payload)
                 if ok:
@@ -109,3 +143,6 @@ with tab_kpi:
     if not df.empty:
         st.markdown("### Tickets by Service Type")
         st.bar_chart(df["ServiceType"].value_counts())
+
+        st.markdown("### Tickets by State")
+        st.bar_chart(df["State"].value_counts())
