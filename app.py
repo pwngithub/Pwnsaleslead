@@ -81,8 +81,8 @@ def add_submission(payload: dict):
     ok = resp.status_code == 200
     return ok, resp.json() if ok else {"status_code": resp.status_code, "text": resp.text}
 
-st.set_page_config(page_title="Sales Lead Tracker v19", page_icon="🆕", layout="wide")
-st.title("🆕 Sales Lead Tracker v19 — Add + Edit Tickets")
+st.set_page_config(page_title="Sales Lead Tracker v19.1", page_icon="🆕", layout="wide")
+st.title("🆕 Sales Lead Tracker v19.1 — Add + Edit Tickets (Fixed IDs)")
 
 # Sidebar controls
 refresh_interval = st.sidebar.selectbox("Auto-refresh interval",[30,60,120,300],index=1)
@@ -96,17 +96,17 @@ tab_add, tab_edit = st.tabs(["➕ Add Ticket", "✏️ Edit Ticket"])
 
 with tab_add:
     st.subheader("Add a New Ticket")
-    name = st.text_input("Name")
-    source = st.selectbox("Source", ["Email","Social Media","Phone Call","Walk-in","In Person"])
-    status = st.selectbox("Status", ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"])
+    name = st.text_input("Name", key="add_name")
+    source = st.selectbox("Source", ["Email","Social Media","Phone Call","Walk-in","In Person"], key="add_source")
+    status = st.selectbox("Status", ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"], key="add_status")
     col1, col2, col3 = st.columns(3)
-    survey_sched = col1.date_input("Survey Scheduled Date", value=None)
-    survey_comp = col1.date_input("Survey Completed Date", value=None)
-    scheduled = col2.date_input("Scheduled Date", value=None)
-    installed = col2.date_input("Installed Date", value=None)
-    waiting_cust = col3.date_input("Waiting on Customer Date", value=None)
+    survey_sched = col1.date_input("Survey Scheduled Date", value=None, key="add_survey_sched")
+    survey_comp = col1.date_input("Survey Completed Date", value=None, key="add_survey_comp")
+    scheduled = col2.date_input("Scheduled Date", value=None, key="add_scheduled")
+    installed = col2.date_input("Installed Date", value=None, key="add_installed")
+    waiting_cust = col3.date_input("Waiting on Customer Date", value=None, key="add_waiting")
 
-    if st.button("💾 Save New Ticket to JotForm"):
+    if st.button("💾 Save New Ticket to JotForm", key="add_save"):
         payload = {
             str(FIELD_ID["name"]): name,
             str(FIELD_ID["source"]): source,
@@ -128,8 +128,6 @@ with tab_add:
 
 with tab_edit:
     st.subheader("Edit an Existing Ticket")
-
-    # Load data
     with st.spinner("Loading submissions from JotForm..."):
         df_raw = fetch_jotform_data()
     if df_raw.empty:
@@ -138,21 +136,24 @@ with tab_edit:
         df = enrich_with_sla(df_raw)
         options = df[["SubmissionID","Name","Status"]].copy()
         options["label"] = options.apply(lambda r: f"{r['Name'] or 'Unknown'} — {r['Status'] or 'Unknown'} — {r['SubmissionID']}", axis=1)
-        sel = st.selectbox("Select a ticket", options["label"].tolist())
+        sel = st.selectbox("Select a ticket", options["label"].tolist(), key="edit_select")
         if sel:
             row = options[options["label"] == sel].iloc[0]
             sid = row["SubmissionID"]
             curr = df[df["SubmissionID"] == sid].iloc[0]
 
-            new_status = st.selectbox("Status", ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"], index=["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"].index(curr["Status"]) if pd.notna(curr["Status"]) else 0)
-            colA, colB, colC = st.columns(3)
-            survey_sched = colA.date_input("Survey Scheduled Date", value=(pd.to_datetime(curr["SurveyScheduledDate"]).date() if pd.notna(curr["SurveyScheduledDate"]) else date.today()))
-            survey_comp  = colA.date_input("Survey Completed Date", value=(pd.to_datetime(curr["SurveyCompletedDate"]).date() if pd.notna(curr["SurveyCompletedDate"]) else date.today()))
-            scheduled    = colB.date_input("Scheduled Date", value=(pd.to_datetime(curr["ScheduledDate"]).date() if pd.notna(curr["ScheduledDate"]) else date.today()))
-            installed    = colB.date_input("Installed Date", value=(pd.to_datetime(curr["InstalledDate"]).date() if pd.notna(curr["InstalledDate"]) else date.today()))
-            waiting_cust = colC.date_input("Waiting on Customer Date", value=(pd.to_datetime(curr["WaitingOnCustomerDate"]).date() if pd.notna(curr["WaitingOnCustomerDate"]) else date.today()))
+            new_status = st.selectbox("Edit Status", ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"], 
+                index=["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"].index(curr["Status"]) if pd.notna(curr["Status"]) else 0,
+                key="edit_status")
 
-            if st.button("💾 Save Changes"):
+            colA, colB, colC = st.columns(3)
+            survey_sched = colA.date_input("Survey Scheduled Date", value=(pd.to_datetime(curr["SurveyScheduledDate"]).date() if pd.notna(curr["SurveyScheduledDate"]) else date.today()), key="edit_survey_sched")
+            survey_comp  = colA.date_input("Survey Completed Date", value=(pd.to_datetime(curr["SurveyCompletedDate"]).date() if pd.notna(curr["SurveyCompletedDate"]) else date.today()), key="edit_survey_comp")
+            scheduled    = colB.date_input("Scheduled Date", value=(pd.to_datetime(curr["ScheduledDate"]).date() if pd.notna(curr["ScheduledDate"]) else date.today()), key="edit_scheduled")
+            installed    = colB.date_input("Installed Date", value=(pd.to_datetime(curr["InstalledDate"]).date() if pd.notna(curr["InstalledDate"]) else date.today()), key="edit_installed")
+            waiting_cust = colC.date_input("Waiting on Customer Date", value=(pd.to_datetime(curr["WaitingOnCustomerDate"]).date() if pd.notna(curr["WaitingOnCustomerDate"]) else date.today()), key="edit_waiting")
+
+            if st.button("💾 Save Changes", key="edit_save"):
                 payload = {
                     str(FIELD_ID["status"]): new_status,
                     str(FIELD_ID["survey_scheduled"]): to_str_date(survey_sched),
@@ -169,5 +170,3 @@ with tab_edit:
                 else:
                     st.error("❌ Failed to update ticket.")
                     st.write(resp_json)
-
-# The rest of the dashboard is unchanged, reusing the previous logic would go here...
