@@ -1,124 +1,289 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import uuid
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISP Lead Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c;
+            color: #e2e8f0;
+        }
+        .container {
+            max-width: 900px;
+        }
+        .card {
+            background-color: #2d3748;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center">
+        <div class="w-full text-center mb-6">
+            <h1 class="text-4xl sm:text-5xl font-bold mb-2 text-white">ISP Lead Tracker</h1>
+            <p class="text-gray-400">Track the status and time of each lead.</p>
+        </div>
 
-# --- Page Configuration ---
-# Use a wide layout and set a title for the page
-st.set_page_config(layout="wide", page_title="Sales & Leads Dashboard", page_icon="📈")
+        <div id="auth-status" class="w-full text-center mb-4 text-sm text-gray-400">
+            <span id="user-id-display">Loading...</span>
+        </div>
 
-# --- Session State Management ---
-# Initialize session state variables if they don't exist
-# This is crucial for persisting data across app reruns
-if 'leads_df' not in st.session_state:
-    # Create a sample DataFrame for demonstration
-    sample_data = {
-        'id': [str(uuid.uuid4()) for _ in range(10)],
-        'Lead Name': ['Acme Corp', 'Globex Inc.', 'Initech', 'Hooli', 'Pied Piper', 'Cyberdyne', 'Tyrell Corp', 'Weyland-Yutani', 'Omni Consumer Products', 'Stark Industries'],
-        'Status': ['New', 'Contacted', 'Qualified', 'New', 'Contacted', 'Qualified', 'New', 'Contacted', 'Qualified', 'New'],
-        'Source': ['Website', 'Referral', 'Paid Ad', 'Referral', 'Website', 'Referral', 'Paid Ad', 'Website', 'Referral', 'Paid Ad'],
-        'Value': [15000, 25000, 50000, 10000, 30000, 60000, 5000, 20000, 45000, 80000],
-        'Assigned Rep': ['Sarah', 'John', 'Sarah', 'Alex', 'Alex', 'John', 'Alex', 'Sarah', 'John', 'Alex'],
-        'Notes': ['Initial contact made.', 'Sent follow-up email.', 'Scheduled demo.', 'New lead from contact form.', 'Left a voicemail.', 'High potential lead.', 'Followed up via social media.', 'Responded to our newsletter.', 'Needs a custom quote.', 'Looking for enterprise solution.']
-    }
-    st.session_state['leads_df'] = pd.DataFrame(sample_data)
+        <!-- Add New Lead Form -->
+        <div class="w-full mb-6 card">
+            <h2 class="text-xl font-semibold mb-4 text-white">Add New Lead</h2>
+            <form id="add-lead-form" class="flex flex-col sm:flex-row gap-4">
+                <input type="text" id="lead-name" placeholder="Enter Lead Name" required class="flex-grow p-3 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-md transition duration-300">
+                    Add Lead
+                </button>
+            </form>
+        </div>
 
-# --- Functions for Data Operations ---
-def add_lead(name, status, source, value, rep, notes):
-    """Adds a new lead to the DataFrame in session state."""
-    new_lead = pd.DataFrame([{
-        'id': str(uuid.uuid4()),
-        'Lead Name': name,
-        'Status': status,
-        'Source': source,
-        'Value': value,
-        'Assigned Rep': rep,
-        'Notes': notes
-    }])
-    st.session_state['leads_df'] = pd.concat([st.session_state['leads_df'], new_lead], ignore_index=True)
-    st.success("Lead added successfully!")
+        <!-- Lead List Section -->
+        <div class="w-full card">
+            <h2 class="text-xl font-semibold mb-4 text-white">Leads</h2>
+            <div id="leads-list" class="grid grid-cols-1 gap-4">
+                <!-- Leads will be dynamically added here -->
+            </div>
+        </div>
 
-def update_lead(updated_df):
-    """Updates the entire DataFrame from the data editor and stores it in session state."""
-    st.session_state['leads_df'] = updated_df
-    st.success("Leads updated successfully!")
+        <!-- Modal for alerts -->
+        <div id="alert-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div class="bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-gray-700">
+                <div class="flex justify-between items-start">
+                    <h3 id="alert-title" class="text-lg font-bold text-white mb-2"></h3>
+                    <button id="close-alert-button" class="text-gray-400 hover:text-gray-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <p id="alert-message" class="text-gray-300 mb-4"></p>
+                <button id="ok-alert-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-300">OK</button>
+            </div>
+        </div>
 
-# --- Dashboard UI ---
-st.title("Sales & Leads Dashboard 📈")
-st.markdown("Track your sales performance and manage your leads in real-time.")
+    </div>
 
-# --- Key Performance Indicators (KPIs) ---
-st.header("Key Metrics")
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-# Calculate KPIs
-total_leads = st.session_state['leads_df'].shape[0]
-new_leads = st.session_state['leads_df'][st.session_state['leads_df']['Status'] == 'New'].shape[0]
-total_value = st.session_state['leads_df']['Value'].sum()
-avg_lead_value = st.session_state['leads_df']['Value'].mean()
+        // Global variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-# Display KPIs using columns
-col1, col2, col3, col4 = st.columns(4)
+        // Status sequence
+        const STATUSES = [
+            "Survey Scheduled",
+            "Survey Complete",
+            "Prep Scheduled",
+            "Prep Complete",
+            "Install Scheduled",
+            "Install Completed"
+        ];
 
-with col1:
-    st.metric(label="Total Leads", value=total_leads, delta=f"+{new_leads} new")
+        let db;
+        let auth;
+        let userId;
 
-with col2:
-    st.metric(label="Total Pipeline Value", value=f"${total_value:,.0f}")
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
 
-with col3:
-    st.metric(label="Average Lead Value", value=f"${avg_lead_value:,.0f}")
+        // UI elements
+        const addLeadForm = document.getElementById('add-lead-form');
+        const leadNameInput = document.getElementById('lead-name');
+        const leadsList = document.getElementById('leads-list');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const alertModal = document.getElementById('alert-modal');
+        const alertTitle = document.getElementById('alert-title');
+        const alertMessage = document.getElementById('alert-message');
+        const closeAlertButton = document.getElementById('close-alert-button');
+        const okAlertButton = document.getElementById('ok-alert-button');
 
-with col4:
-    # Calculate conversion rate from 'Qualified' to a hypothetical 'Closed Won' status
-    qualified_leads = st.session_state['leads_df'][st.session_state['leads_df']['Status'] == 'Qualified'].shape[0]
-    conversion_rate = (qualified_leads / total_leads * 100) if total_leads > 0 else 0
-    st.metric(label="Conversion Rate", value=f"{conversion_rate:.1f}%")
+        // Alert function to replace window.alert
+        function showAlert(title, message) {
+            alertTitle.textContent = title;
+            alertMessage.textContent = message;
+            alertModal.classList.remove('hidden');
+        }
 
-# --- Interactive Charts ---
-st.header("Sales & Leads Funnel")
+        closeAlertButton.addEventListener('click', () => {
+            alertModal.classList.add('hidden');
+        });
 
-# Create a bar chart for leads by status
-leads_by_status = st.session_state['leads_df'].groupby('Status').size().reset_index(name='count')
-st.bar_chart(leads_by_status.set_index('Status'))
+        okAlertButton.addEventListener('click', () => {
+            alertModal.classList.add('hidden');
+        });
 
-# Create a pie chart for leads by source
-leads_by_source = st.session_state['leads_df'].groupby('Source').size()
-st.subheader("Leads by Source")
-st.bar_chart(leads_by_source)
+        // Authentication State Listener
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                userIdDisplay.textContent = `User ID: ${userId}`;
+                // Start listening to Firestore after authentication is ready
+                setupFirestoreListener();
+            } else {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Error during authentication:", error);
+                    showAlert("Authentication Error", "Could not sign in. Please try again.");
+                }
+            }
+        });
 
-# --- Leads Data Table ---
-st.header("Leads Data")
-st.markdown("Use the table below to view and edit your leads. Changes are saved automatically.")
+        // Listen for real-time changes to the leads collection
+        function setupFirestoreListener() {
+            const leadsCollection = collection(db, `artifacts/${appId}/public/data/leads`);
+            const q = query(leadsCollection);
 
-# The data editor allows the user to directly modify the DataFrame
-# The on_change callback is triggered when the user modifies data
-st.data_editor(st.session_state['leads_df'], key="leads_table", on_change=lambda: update_lead(st.session_state.leads_table), use_container_width=True)
+            onSnapshot(q, (snapshot) => {
+                const leads = [];
+                snapshot.forEach((doc) => {
+                    leads.push({ id: doc.id, ...doc.data() });
+                });
+                renderLeads(leads);
+            }, (error) => {
+                console.error("Error listening to leads:", error);
+                showAlert("Data Error", "Could not fetch leads in real-time. Please check your connection.");
+            });
+        }
 
+        // Add a new lead
+        addLeadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const leadName = leadNameInput.value.trim();
+            if (leadName) {
+                try {
+                    await addDoc(collection(db, `artifacts/${appId}/public/data/leads`), {
+                        name: leadName,
+                        status: STATUSES[0],
+                        statusHistory: [{ status: STATUSES[0], timestamp: serverTimestamp() }],
+                        createdAt: serverTimestamp(),
+                        userId: userId,
+                    });
+                    leadNameInput.value = '';
+                } catch (error) {
+                    console.error("Error adding document:", error);
+                    showAlert("Add Lead Error", "Failed to add the new lead. Please try again.");
+                }
+            }
+        });
 
-# --- Add New Lead Form (in a sidebar) ---
-st.sidebar.header("Add New Lead")
-with st.sidebar.form(key='add_lead_form'):
-    lead_name = st.text_input("Lead Name", placeholder="e.g., Jane Doe")
-    lead_status = st.selectbox("Status", ['New', 'Contacted', 'Qualified', 'Closed Won', 'Closed Lost'])
-    lead_source = st.text_input("Source", placeholder="e.g., Website, Referral, etc.")
-    lead_value = st.number_input("Value ($)", min_value=0, value=0)
-    lead_rep = st.selectbox("Assigned Rep", ['Sarah', 'John', 'Alex'])
-    lead_notes = st.text_area("Notes", placeholder="Add any relevant notes about the lead.")
-    
-    submit_button = st.form_submit_button(label='Add Lead')
-    
-    if submit_button:
-        if lead_name and lead_status and lead_source and lead_value:
-            add_lead(lead_name, lead_status, lead_source, lead_value, lead_rep, lead_notes)
-        else:
-            st.warning("Please fill in all required fields.")
+        // Format duration to a human-readable string (e.g., "1h 2m 3s")
+        function formatDuration(ms) {
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
 
-# --- Explanation and How-to-run ---
-st.markdown("""
----
-### How to Use this Dashboard
-1.  **Run the app:** Save this code as `app.py` and run it from your terminal using the command `streamlit run app.py`.
-2.  **View and Edit Data:** The main table allows you to directly edit existing lead data. Any changes you make will be saved automatically.
-3.  **Add New Leads:** Use the form in the sidebar to input information for new leads.
-4.  **Analyze Metrics:** The key metrics and charts at the top will automatically update as you add or edit data, giving you a real-time view of your sales funnel.
-""")
+            let parts = [];
+            if (hours > 0) parts.push(`${hours}h`);
+            if (minutes % 60 > 0) parts.push(`${minutes % 60}m`);
+            if (seconds % 60 > 0) parts.push(`${seconds % 60}s`);
+
+            return parts.length > 0 ? parts.join(' ') : "0s";
+        }
+
+        // Render the leads list
+        function renderLeads(leads) {
+            leadsList.innerHTML = '';
+            if (leads.length === 0) {
+                leadsList.innerHTML = '<p class="text-gray-400 text-center">No leads yet. Add one above!</p>';
+                return;
+            }
+
+            leads.forEach(lead => {
+                const currentTime = Date.now();
+                const totalDuration = lead.createdAt && lead.createdAt.toMillis ? currentTime - lead.createdAt.toMillis() : 0;
+                const lastStatusTime = lead.statusHistory && lead.statusHistory.length > 0 ? lead.statusHistory[lead.statusHistory.length - 1].timestamp.toMillis() : currentTime;
+                const currentStatusDuration = currentTime - lastStatusTime;
+
+                const leadItem = document.createElement('div');
+                leadItem.classList.add('card', 'flex', 'flex-col', 'sm:flex-row', 'items-start', 'sm:items-center', 'justify-between', 'gap-4', 'mb-4');
+                
+                // Content section
+                const contentDiv = document.createElement('div');
+                contentDiv.classList.add('flex-grow');
+                contentDiv.innerHTML = `
+                    <h3 class="text-lg font-bold text-white">${lead.name}</h3>
+                    <p class="text-sm text-gray-400">Current Status: <span class="font-semibold text-white">${lead.status}</span></p>
+                    <p class="text-sm text-gray-400">Time in Status: <span class="font-semibold">${formatDuration(currentStatusDuration)}</span></p>
+                    <p class="text-sm text-gray-400">Total Time: <span class="font-semibold">${formatDuration(totalDuration)}</span></p>
+                `;
+                leadItem.appendChild(contentDiv);
+                
+                // Buttons section
+                const buttonDiv = document.createElement('div');
+                buttonDiv.classList.add('flex', 'flex-col', 'sm:flex-row', 'gap-2', 'sm:mt-0', 'w-full', 'sm:w-auto');
+                
+                const currentIndex = STATUSES.indexOf(lead.status);
+
+                // Next Status Button
+                if (currentIndex < STATUSES.length - 1) {
+                    const nextButton = document.createElement('button');
+                    nextButton.textContent = `Move to ${STATUSES[currentIndex + 1]}`;
+                    nextButton.classList.add('bg-green-600', 'hover:bg-green-700', 'text-white', 'font-semibold', 'py-2', 'px-4', 'rounded-md', 'transition', 'duration-300', 'w-full', 'sm:w-auto');
+                    nextButton.addEventListener('click', async () => {
+                        const previousStatusDuration = Date.now() - (lead.statusHistory[lead.statusHistory.length - 1].timestamp.toMillis());
+                        const newStatusHistory = [
+                            ...lead.statusHistory,
+                            { status: STATUSES[currentIndex + 1], timestamp: serverTimestamp() }
+                        ];
+
+                        // Calculate total time
+                        let totalTimeMs = 0;
+                        if (lead.createdAt && lead.createdAt.toMillis) {
+                            totalTimeMs = Date.now() - lead.createdAt.toMillis();
+                        }
+                        
+                        try {
+                            const leadDocRef = doc(db, `artifacts/${appId}/public/data/leads`, lead.id);
+                            await updateDoc(leadDocRef, {
+                                status: STATUSES[currentIndex + 1],
+                                statusHistory: newStatusHistory,
+                                totalTime: totalTimeMs
+                            });
+                        } catch (error) {
+                            console.error("Error updating document:", error);
+                            showAlert("Update Error", "Failed to update the lead's status. Please try again.");
+                        }
+                    });
+                    buttonDiv.appendChild(nextButton);
+                }
+
+                // Delete Button
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Delete';
+                deleteButton.classList.add('bg-red-600', 'hover:bg-red-700', 'text-white', 'font-semibold', 'py-2', 'px-4', 'rounded-md', 'transition', 'duration-300', 'w-full', 'sm:w-auto');
+                deleteButton.addEventListener('click', async () => {
+                    if (confirm("Are you sure you want to delete this lead?")) {
+                        try {
+                            await deleteDoc(doc(db, `artifacts/${appId}/public/data/leads`, lead.id));
+                        } catch (error) {
+                            console.error("Error deleting document:", error);
+                            showAlert("Delete Error", "Failed to delete the lead. Please try again.");
+                        }
+                    }
+                });
+                buttonDiv.appendChild(deleteButton);
+                
+                leadItem.appendChild(buttonDiv);
+                leadsList.appendChild(leadItem);
+            });
+        }
+    </script>
+</body>
+</html>
