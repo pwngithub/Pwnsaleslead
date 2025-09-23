@@ -4,7 +4,12 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 from streamlit_autorefresh import st_autorefresh
-from st_aggrid import AgGrid, GridOptionsBuilder
+
+try:
+    from st_aggrid import AgGrid, GridOptionsBuilder
+    aggrid_available = True
+except ImportError:
+    aggrid_available = False
 
 SLA_LIMITS = {"Survey":3,"Scheduling":3,"Install Wait":3}
 
@@ -32,8 +37,8 @@ def enrich_with_sla(df):
     df["InstallSLA"] = df["InstallWaitDuration"].apply(lambda d:"❌" if pd.notna(d) and d>SLA_LIMITS["Install Wait"] else "✅")
     return df
 
-st.set_page_config(page_title="Sales Lead Tracker v14", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v14 — Ag-Grid SLA Highlighting")
+st.set_page_config(page_title="Sales Lead Tracker v14.1", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v14.1 — AgGrid with Fallback")
 
 # Sidebar controls
 refresh_interval = st.sidebar.selectbox("Auto-refresh interval",[30,60,120,300],index=1)
@@ -60,7 +65,7 @@ if sla_only:
     breach_mask = (filtered["SurveySLA"].eq("❌") | filtered["SchedulingSLA"].eq("❌") | filtered["InstallSLA"].eq("❌"))
     filtered = filtered[breach_mask]
 
-# 🔔 SLA Banner Alert
+# SLA Banner Alert
 breach_mask_all = (df["SurveySLA"].eq("❌") | df["SchedulingSLA"].eq("❌") | df["InstallSLA"].eq("❌"))
 breach_count_all = int(breach_mask_all.sum())
 if breach_count_all > 0:
@@ -86,7 +91,7 @@ if not status_counts.empty:
 else:
     st.info("No tickets match filters.")
 
-# KPI Metrics (live with filters)
+# KPI Metrics
 st.subheader("📈 KPI Metrics (Filtered — Live Updates)")
 if not filtered.empty:
     installs = filtered.dropna(subset=["TotalDaysToInstall"])
@@ -131,26 +136,33 @@ if segments:
 else:
     st.info("No timeline data for current filters.")
 
-# Table with AgGrid
-st.subheader("📋 Ticket Table with SLA (Filtered & Highlighted in AgGrid)")
+# Table with fallback
+st.subheader("📋 Ticket Table with SLA (Filtered — AgGrid or Fallback)")
 if not filtered.empty:
     show=filtered[["Name","Contact","Source","Status","SurveyDuration","SurveySLA","SchedulingDuration","SchedulingSLA","InstallWaitDuration","InstallSLA","TotalDaysToInstall"]]
-    gb = GridOptionsBuilder.from_dataframe(show)
-    gb.configure_default_column(resizable=True, filter=True, sortable=True)
-    gb.configure_pagination()
-    # Conditional formatting for SLA columns
-    cellsytle_jscode = '''
-    function(params) {
-        if (params.value === "❌") {
-            return {"backgroundColor": "#ffcccc"};
-        }
-    };
-    '''
-    gb.configure_column("SurveySLA", cellStyle=cellsytle_jscode)
-    gb.configure_column("SchedulingSLA", cellStyle=cellsytle_jscode)
-    gb.configure_column("InstallSLA", cellStyle=cellsytle_jscode)
-    gridOptions = gb.build()
-    AgGrid(show, gridOptions=gridOptions, theme="streamlit", fit_columns_on_grid_load=True)
+    if aggrid_available:
+        try:
+            gb = GridOptionsBuilder.from_dataframe(show)
+            gb.configure_default_column(resizable=True, filter=True, sortable=True)
+            gb.configure_pagination()
+            # Conditional formatting
+            cellsytle_jscode = '''
+            function(params) {
+                if (params.value === "❌") {
+                    return {"backgroundColor": "#ffcccc"};
+                }
+            };
+            '''
+            gb.configure_column("SurveySLA", cellStyle=cellsytle_jscode)
+            gb.configure_column("SchedulingSLA", cellStyle=cellsytle_jscode)
+            gb.configure_column("InstallSLA", cellStyle=cellsytle_jscode)
+            gridOptions = gb.build()
+            AgGrid(show, gridOptions=gridOptions, theme="streamlit", fit_columns_on_grid_load=True)
+        except Exception as e:
+            st.warning("⚠️ AgGrid failed, showing fallback table.")
+            st.dataframe(show)
+    else:
+        st.dataframe(show)
 else:
     st.info("No tickets to show for current filters.")
 
