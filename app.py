@@ -135,7 +135,7 @@ with st.expander("View and Manage Leads", expanded=True):
     # Create a copy for editing to avoid modifying session state directly during filtering
     edited_df = st.data_editor(
         filtered_df[['Lead ID', 'Name', 'Company', 'Sales Rep', 'Status', 'Time In Status', 'Notes']],
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         key="lead_editor",
         column_config={
@@ -190,7 +190,7 @@ with st.expander("Lead Status Visualization", expanded=True):
     
     with col1:
         st.markdown("### Lead Distribution by Status")
-        st.dataframe(status_counts, hide_index=True, use_container_width=True)
+        st.dataframe(status_counts, hide_index=True, width='stretch')
 
     with col2:
         st.markdown("### Lead Distribution Chart")
