@@ -74,14 +74,26 @@ def replace_submission(sub_id, payload: dict):
     requests.delete(del_url, timeout=30)
     return add_submission(payload)
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.10", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.10 — Unique Button Keys Fix")
+def erase_all_submissions():
+    url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apikey={API_KEY}"
+    r = requests.get(url, timeout=30)
+    if r.status_code != 200:
+        return False, f"Failed to fetch submissions: {r.text}"
+    subs = r.json().get("content", [])
+    count = 0
+    for sub in subs:
+        sid = sub.get("id")
+        if sid:
+            del_url = f"{JOTFORM_API}/submission/{sid}?apiKey={API_KEY}"
+            d = requests.delete(del_url, timeout=30)
+            if d.status_code == 200:
+                count += 1
+    return True, count
+
+st.set_page_config(page_title="Sales Lead Tracker v19.9.11", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.11 — Erase All Tickets")
 
 df = fetch_jotform_data()
-if df.empty:
-    st.warning("⚠️ No data pulled from JotForm yet.")
-    st.stop()
-
 if "edit_ticket_id" not in st.session_state:
     st.session_state.edit_ticket_id = None
 
@@ -103,104 +115,6 @@ with tab_all:
             st.session_state.edit_ticket_id = row["SubmissionID"]
             st.rerun()
 
-with tab_add:
-    st.subheader("Add Ticket")
-    name = st.text_input("Name (First Last)", key="add_name")
-    source = st.selectbox("Source", SOURCE_LIST, key="add_source")
-    status = st.selectbox("Status", STATUS_LIST, key="add_status")
-    service_type = st.selectbox("Service Type", SERVICE_TYPES, key="add_service_type")
-    st.markdown("**Address**")
-    street = st.text_input("Street", key="add_addr1")
-    street2 = st.text_input("Street 2", key="add_addr2")
-    city = st.text_input("City", key="add_city")
-    state = st.text_input("State", key="add_state")
-    postal = st.text_input("Postal Code", key="add_postal")
-    if st.button("💾 Save New Ticket", key="add_save_btn"):
-        now = datetime.datetime.now().isoformat()
-        payload = {
-            FIELD_ID["name"]: name,
-            FIELD_ID["source"]: source,
-            FIELD_ID["status"]: status,
-            FIELD_ID["service_type"]: service_type,
-            FIELD_ID["address"]: {
-                "addr_line1": street,
-                "addr_line2": street2,
-                "city": city,
-                "state": state,
-                "postal": postal
-            }
-        }
-        if status == "Survey Scheduled":
-            payload[FIELD_ID["survey_scheduled"]] = now
-        elif status == "Survey Completed":
-            payload[FIELD_ID["survey_completed"]] = now
-        elif status == "Scheduled":
-            payload[FIELD_ID["scheduled"]] = now
-        elif status == "Installed":
-            payload[FIELD_ID["installed"]] = now
-        elif status == "Waiting on Customer":
-            payload[FIELD_ID["waiting_on_customer"]] = now
-        ok, resp = add_submission(payload)
-        if ok:
-            st.success("✅ Ticket added.")
-            st.json(resp)
-            st.rerun()
-        else:
-            st.error("❌ Failed to add ticket."); st.write(resp)
-
-with tab_edit:
-    st.subheader("Edit Ticket (Change Status Only)")
-    st.warning("⚠️ Editing will delete the old submission and create a new one. Submission ID will change.")
-    options = dict(zip(df["DisplayName"], df["SubmissionID"]))
-    default_idx = 0
-    if st.session_state.edit_ticket_id:
-        for i, sid in enumerate(options.values()):
-            if sid == st.session_state.edit_ticket_id:
-                default_idx = i
-                break
-    selected_name = st.selectbox("Select Ticket", options=list(options.keys()), index=default_idx)
-    ticket_id = options[selected_name]
-    if ticket_id:
-        row = df[df["SubmissionID"] == ticket_id].iloc[0]
-        st.write("**Name:**", row["Name"])
-        st.write("**Source:**", row["Source"])
-        st.write("**Service Type:**", row["ServiceType"])
-        st.write("**Address:**", f"{row['Street']} {row['Street2']} {row['City']} {row['State']} {row['Postal']}")
-        new_status = st.selectbox("New Status", STATUS_LIST, index=STATUS_LIST.index(row["Status"]) if row["Status"] in STATUS_LIST else 0, key="edit_status")
-        if st.button("💾 Save Status Update", key="edit_save_btn"):
-            now = datetime.datetime.now().isoformat()
-            payload = {
-                FIELD_ID["name"]: row["Name"],
-                FIELD_ID["source"]: row["Source"],
-                FIELD_ID["status"]: new_status,
-                FIELD_ID["service_type"]: row["ServiceType"],
-                FIELD_ID["address"]: {
-                    "addr_line1": row["Street"],
-                    "addr_line2": row["Street2"],
-                    "city": row["City"],
-                    "state": row["State"],
-                    "postal": row["Postal"]
-                }
-            }
-            if new_status == "Survey Scheduled":
-                payload[FIELD_ID["survey_scheduled"]] = now
-            elif new_status == "Survey Completed":
-                payload[FIELD_ID["survey_completed"]] = now
-            elif new_status == "Scheduled":
-                payload[FIELD_ID["scheduled"]] = now
-            elif new_status == "Installed":
-                payload[FIELD_ID["installed"]] = now
-            elif new_status == "Waiting on Customer":
-                payload[FIELD_ID["waiting_on_customer"]] = now
-            ok, resp = replace_submission(ticket_id, payload)
-            if ok:
-                st.success("✅ Ticket updated (recreated).")
-                st.json(resp)
-                st.session_state.edit_ticket_id = None
-                st.rerun()
-            else:
-                st.error("❌ Failed to update ticket."); st.write(resp)
-
 with tab_kpi:
     st.subheader("📊 KPI Dashboard")
     if not df.empty:
@@ -208,3 +122,14 @@ with tab_kpi:
         st.bar_chart(df["ServiceType"].value_counts())
         st.markdown("### Tickets by State")
         st.bar_chart(df["State"].value_counts())
+
+    st.markdown("---")
+    st.error("⚠️ Danger Zone: This will erase ALL tickets from JotForm permanently!")
+    confirm = st.checkbox("I understand this will erase all tickets permanently")
+    if confirm and st.button("🚨 Erase All Tickets"):
+        ok, result = erase_all_submissions()
+        if ok:
+            st.success(f"✅ Successfully erased {result} tickets.")
+            st.rerun()
+        else:
+            st.error(f"❌ Failed: {result}")
