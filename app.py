@@ -65,7 +65,19 @@ with st.form("new_lead_form", clear_on_submit=True):
         new_company = st.text_input("Company", placeholder="e.g., Sample Corp", help="Enter the lead's company name.")
         new_status = st.selectbox(
             "Status",
-            options=["New", "Contacted", "Proposal Sent", "Negotiation", "Closed Won", "Closed Lost"],
+            options=[
+                "New",
+                "Contacted",
+                "Proposal Sent",
+                "Negotiation",
+                "Closed Won",
+                "Closed Lost",
+                "Survey Added",
+                "Survey Completed",
+                "Prep Scheduled",
+                "Prep Completed",
+                "Install Scheduled"
+            ],
             index=0
         )
     with col2:
