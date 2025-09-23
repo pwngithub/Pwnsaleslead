@@ -43,21 +43,24 @@ def fetch_jotform_data():
     return pd.DataFrame(records)
 
 def update_submission(submission_id: str, payload: dict):
-    form = {f"submission[{qid}]": val for qid,val in payload.items() if val is not None}
+    # ⚠️ JotForm does not allow editing answers directly, only meta
+    # Placeholder if needed for deletion/recreate approach
     url = f"{JOTFORM_API}/submission/{submission_id}?apiKey={API_KEY}"
+    form = {f"q{qid}": val for qid, val in payload.items() if val is not None}
     resp = requests.post(url, data=form, timeout=30)
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
 def add_submission(payload: dict):
-    form = {f"submission[{qid}]": val for qid,val in payload.items() if val is not None}
+    # FIX: JotForm requires q{field_id} keys instead of submission[{id}]
+    form = {f"q{qid}": val for qid, val in payload.items() if val is not None}
     url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apiKey={API_KEY}"
     resp = requests.post(url, data=form, timeout=30)
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.1", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.1 — Safer Answer Handling")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.2", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.2 — Add Ticket Fix")
 
 df = fetch_jotform_data()
 if df.empty:
@@ -104,11 +107,11 @@ with tab_add:
 
     if st.button("💾 Save New Ticket", key="add_save_btn"):
         payload = {
-            str(FIELD_ID["name"]): name,
-            str(FIELD_ID["source"]): source,
-            str(FIELD_ID["status"]): status,
-            str(FIELD_ID["service_type"]): service_type,
-            str(FIELD_ID["address"]): {
+            FIELD_ID["name"]: name,
+            FIELD_ID["source"]: source,
+            FIELD_ID["status"]: status,
+            FIELD_ID["service_type"]: service_type,
+            FIELD_ID["address"]: {
                 "addr_line1": street,
                 "addr_line2": street2,
                 "city": city,
@@ -147,9 +150,9 @@ with tab_edit:
 
             if st.button("💾 Save Changes", key="edit_save_btn"):
                 payload = {
-                    str(FIELD_ID["status"]): new_status,
-                    str(FIELD_ID["service_type"]): new_service,
-                    str(FIELD_ID["address"]): {
+                    FIELD_ID["status"]: new_status,
+                    FIELD_ID["service_type"]: new_service,
+                    FIELD_ID["address"]: {
                         "addr_line1": new_street,
                         "addr_line2": new_street2,
                         "city": new_city,
