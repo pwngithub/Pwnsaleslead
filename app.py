@@ -1,8 +1,8 @@
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import requests
+import datetime
 from config import API_KEY, FORM_ID, FIELD_ID
 
 JOTFORM_API = "https://api.jotform.com"
@@ -65,36 +65,22 @@ def add_submission(payload: dict):
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text, "sent_form": form})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.5", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.5 — Name Field Fix")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.6", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.6 — Auto Status Timestamps")
 
 df = fetch_jotform_data()
 if df.empty:
     st.warning("⚠️ No data pulled from JotForm yet.")
     st.stop()
 
-# Tabs (All Tickets first)
+# Tabs
 tab_all, tab_add, tab_edit, tab_kpi = st.tabs(["📋 All Tickets", "➕ Add Ticket", "✏️ Edit Ticket", "📊 KPI Dashboard"])
 
-# All Tickets Preview
+# All Tickets
 with tab_all:
     st.subheader("All Tickets Preview")
-
-    # Filters
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        f_status = st.multiselect("Filter by Status", options=STATUS_LIST, default=STATUS_LIST, key="all_status")
-    with col2:
-        f_service = st.multiselect("Filter by Service Type", options=SERVICE_TYPES, default=SERVICE_TYPES, key="all_service")
-    with col3:
-        search_name = st.text_input("Search by Name", key="all_search")
-
-    filtered = df[df["Status"].isin(f_status) & df["ServiceType"].isin(f_service)]
-    if search_name:
-        filtered = filtered[filtered["Name"].str.contains(search_name, case=False, na=False)]
-
     show_cols = ["SubmissionID","Name","Source","Status","ServiceType","City","State","LostReason"]
-    st.dataframe(filtered[show_cols], use_container_width=True)
+    st.dataframe(df[show_cols], use_container_width=True)
 
 # Add Ticket
 with tab_add:
@@ -112,6 +98,7 @@ with tab_add:
     postal = st.text_input("Postal Code", key="add_postal")
 
     if st.button("💾 Save New Ticket", key="add_save_btn"):
+        now = datetime.datetime.now().isoformat()
         payload = {
             FIELD_ID["name"]: name,
             FIELD_ID["source"]: source,
@@ -125,6 +112,18 @@ with tab_add:
                 "postal": postal
             }
         }
+        # auto timestamps
+        if status == "Survey Scheduled":
+            payload[FIELD_ID["survey_scheduled"]] = now
+        elif status == "Survey Completed":
+            payload[FIELD_ID["survey_completed"]] = now
+        elif status == "Scheduled":
+            payload[FIELD_ID["scheduled"]] = now
+        elif status == "Installed":
+            payload[FIELD_ID["installed"]] = now
+        elif status == "Waiting on Customer":
+            payload[FIELD_ID["waiting_on_customer"]] = now
+
         ok, resp = add_submission(payload)
         if ok:
             st.success("✅ Ticket added.")
@@ -133,10 +132,10 @@ with tab_add:
         else:
             st.error("❌ Failed to add ticket."); st.write(resp)
 
-# Edit Ticket
+# Edit Ticket (limited support)
 with tab_edit:
     st.subheader("Edit Ticket (Limited Support)")
-    st.info("JotForm API does not fully support editing submission answers.")
+    st.info("Editing answers is limited by JotForm API.")
 
 # KPI Dashboard
 with tab_kpi:
