@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import os, json
+from datetime import datetime
 from config import API_KEY, FORM_ID, FIELD_ID, BLOCKED_WORDS as DEFAULT_BLOCKED
 
 JOTFORM_API = "https://api.jotform.com"
@@ -65,14 +66,21 @@ def apply_blocklist(df, blocked_words):
     df = df[~mask]
     return df, hidden_count
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.19", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.19 — Settings with Persistent Blocklist")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.20", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.20 — Live Sync Only")
 
 settings = load_settings()
 blocked_words = settings.get("blocked_words", DEFAULT_BLOCKED)
 
+# Refresh button logic
+if st.button("🔄 Refresh Tickets"):
+    st.session_state["refresh"] = True
+
 df = fetch_jotform_data()
 df, hidden_count = apply_blocklist(df, blocked_words)
+
+sync_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+st.caption(f"Last synced from JotForm: {sync_time}")
 
 if hidden_count > 0:
     st.info(f"ℹ️ {hidden_count} tickets hidden (matched blocked words: {', '.join(blocked_words)})")
