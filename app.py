@@ -29,10 +29,14 @@ def fetch_jotform_data():
             addr_raw = {}
         name_raw = ans.get(str(FIELD_ID["name"]), {}).get("answer", {})
         if isinstance(name_raw, dict):
-            name_val = f"{name_raw.get('first','')} {name_raw.get('last','')}".strip()
+            first = name_raw.get("first", "").strip()
+            last = name_raw.get("last", "").strip()
+            name_val = f"{first} {last}".strip()
+        elif isinstance(name_raw, str):
+            name_val = name_raw.strip()
         else:
-            name_val = name_raw if isinstance(name_raw, str) else None
-        display_name = name_val if name_val else "Unnamed"
+            name_val = None
+        display_name = name_val if name_val else f"Unnamed ({sub.get('id')})"
         if addr_raw.get("city") or addr_raw.get("state"):
             display_name += f" – {addr_raw.get('city','')}, {addr_raw.get('state','')}"
         records.append({
@@ -74,24 +78,8 @@ def replace_submission(sub_id, payload: dict):
     requests.delete(del_url, timeout=30)
     return add_submission(payload)
 
-def erase_all_submissions():
-    url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apikey={API_KEY}"
-    r = requests.get(url, timeout=30)
-    if r.status_code != 200:
-        return False, f"Failed to fetch submissions: {r.text}"
-    subs = r.json().get("content", [])
-    count = 0
-    for sub in subs:
-        sid = sub.get("id")
-        if sid:
-            del_url = f"{JOTFORM_API}/submission/{sid}?apiKey={API_KEY}"
-            d = requests.delete(del_url, timeout=30)
-            if d.status_code == 200:
-                count += 1
-    return True, count
-
-st.set_page_config(page_title="Sales Lead Tracker v19.9.11", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.11 — Erase All Tickets")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.12", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.12 — Fixed Name Handling")
 
 df = fetch_jotform_data()
 if "edit_ticket_id" not in st.session_state:
@@ -122,14 +110,3 @@ with tab_kpi:
         st.bar_chart(df["ServiceType"].value_counts())
         st.markdown("### Tickets by State")
         st.bar_chart(df["State"].value_counts())
-
-    st.markdown("---")
-    st.error("⚠️ Danger Zone: This will erase ALL tickets from JotForm permanently!")
-    confirm = st.checkbox("I understand this will erase all tickets permanently")
-    if confirm and st.button("🚨 Erase All Tickets"):
-        ok, result = erase_all_submissions()
-        if ok:
-            st.success(f"✅ Successfully erased {result} tickets.")
-            st.rerun()
-        else:
-            st.error(f"❌ Failed: {result}")
