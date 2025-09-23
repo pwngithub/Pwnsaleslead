@@ -102,14 +102,27 @@ def parse_dt(x):
 def enrich_with_durations(df):
     if df.empty:
         return df.copy()
+
     out = df.copy()
-    for col in ["CreatedAt","SurveyScheduledDate","SurveyCompletedDate","ScheduledDate","InstalledDate","WaitingOnCustomerDate"]:
-        out[col] = out[col].apply(parse_dt)
-    out["TotalDaysToInstall"] = (out["InstalledDate"] - out["CreatedAt"]).dt.days
-    out["SurveyDuration"]      = (out["SurveyCompletedDate"] - out["SurveyScheduledDate"]).dt.days
-    out["SchedulingDuration"]  = (out["ScheduledDate"] - out["SurveyCompletedDate"]).dt.days
-    out["InstallWaitDuration"] = (out["InstalledDate"] - out["ScheduledDate"]).dt.days
+
+    # Ensure datetimes
+    for col in ["CreatedAt","SurveyScheduledDate","SurveyCompletedDate",
+                "ScheduledDate","InstalledDate","WaitingOnCustomerDate"]:
+        out[col] = pd.to_datetime(out[col], errors="coerce", utc=True)
+
+    # Helper to calc durations safely
+    def duration_days(start, end):
+        if pd.isna(start) or pd.isna(end):
+            return pd.NA
+        return (end - start).days
+
+    out["TotalDaysToInstall"] = [duration_days(s, e) for s, e in zip(out["CreatedAt"], out["InstalledDate"])]
+    out["SurveyDuration"]      = [duration_days(s, e) for s, e in zip(out["SurveyScheduledDate"], out["SurveyCompletedDate"])]
+    out["SchedulingDuration"]  = [duration_days(s, e) for s, e in zip(out["SurveyCompletedDate"], out["ScheduledDate"])]
+    out["InstallWaitDuration"] = [duration_days(s, e) for s, e in zip(out["ScheduledDate"], out["InstalledDate"])]
+
     return out
+
 
 def build_timeline_segments(row):
     segs = []
