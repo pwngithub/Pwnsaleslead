@@ -54,16 +54,36 @@ def add_submission(payload: dict):
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.8.2", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.8.2 — Safe Address Handling")
+st.set_page_config(page_title="Sales Lead Tracker v19.9", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9 — All Tickets Preview")
 
 df = fetch_jotform_data()
 if df.empty:
     st.warning("⚠️ No data pulled from JotForm yet.")
     st.stop()
 
-# Tabs
-tab_add, tab_edit, tab_kpi = st.tabs(["➕ Add Ticket", "✏️ Edit Ticket", "📊 KPI Dashboard"])
+# Tabs (All Tickets first)
+tab_all, tab_add, tab_edit, tab_kpi = st.tabs(["📋 All Tickets", "➕ Add Ticket", "✏️ Edit Ticket", "📊 KPI Dashboard"])
+
+# All Tickets Preview
+with tab_all:
+    st.subheader("All Tickets Preview")
+
+    # Filters
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        f_status = st.multiselect("Filter by Status", options=STATUS_LIST, default=STATUS_LIST, key="all_status")
+    with col2:
+        f_service = st.multiselect("Filter by Service Type", options=SERVICE_TYPES, default=SERVICE_TYPES, key="all_service")
+    with col3:
+        search_name = st.text_input("Search by Name", key="all_search")
+
+    filtered = df[df["Status"].isin(f_status) & df["ServiceType"].isin(f_service)]
+    if search_name:
+        filtered = filtered[filtered["Name"].str.contains(search_name, case=False, na=False)]
+
+    show_cols = ["SubmissionID","Name","Source","Status","ServiceType","City","State","LostReason"]
+    st.dataframe(filtered[show_cols], use_container_width=True)
 
 # Add Ticket
 with tab_add:
