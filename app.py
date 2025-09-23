@@ -1,190 +1,205 @@
+
 import streamlit as st
 import pandas as pd
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
+import plotly.express as px
+from io import BytesIO
 
-# JotForm credentials
+# ────────────────────────────────
+# CONFIG
+# ────────────────────────────────
+
 API_KEY = "22179825a79dba61013e4fc3b9d30fa4"
 FORM_ID = "252598168633065"
 
-# Field IDs for timestamps
 FIELD_IDS = {
+    "name": 1,
+    "contact": 2,
+    "source": 3,
+    "status": 4,
+    "notes": 5,
     "survey_scheduled_date": 12,
     "survey_completed_date": 13,
     "scheduled_date": 14,
     "installed_date": 15,
     "waiting_on_customer_date": 16,
-    "status": 4
+    "assigned_rep": None  # fill this with qid if added in JotForm
 }
+
+STATUS_OPTIONS = [
+    "Survey Scheduled",
+    "Survey Completed",
+    "Scheduled",
+    "Installed",
+    "Waiting on Customer",
+]
+
+# ────────────────────────────────
+# DATA ACCESS
+# ────────────────────────────────
 
 BASE_URL = f"https://api.jotform.com/form/{FORM_ID}/submissions?apiKey={API_KEY}"
 
 def fetch_jotform_data():
-    """Fetch submissions from JotForm API"""
     response = requests.get(BASE_URL)
     if response.status_code != 200:
         st.error("❌ Failed to fetch data from JotForm API.")
         return pd.DataFrame()
-    
     data = response.json()
-    submissions = []
-
+    rows = []
     for item in data.get("content", []):
         answers = item.get("answers", {})
-        submissions.append({
+        get = lambda qid: answers.get(str(qid), {}).get("answer", "")
+        rows.append({
             "SubmissionID": item.get("id", ""),
             "CreatedAt": item.get("created_at", ""),
-            "Name": answers.get("1", {}).get("answer", ""),
-            "Contact": answers.get("2", {}).get("answer", ""),
-            "Source": answers.get("3", {}).get("answer", ""),
-            "Status": answers.get(str(FIELD_IDS["status"]), {}).get("answer", ""),
-            "Notes": answers.get("5", {}).get("answer", ""),
-            "SurveyScheduledDate": answers.get(str(FIELD_IDS["survey_scheduled_date"]), {}).get("answer", ""),
-            "SurveyCompletedDate": answers.get(str(FIELD_IDS["survey_completed_date"]), {}).get("answer", ""),
-            "ScheduledDate": answers.get(str(FIELD_IDS["scheduled_date"]), {}).get("answer", ""),
-            "InstalledDate": answers.get(str(FIELD_IDS["installed_date"]), {}).get("answer", ""),
-            "WaitingOnCustomerDate": answers.get(str(FIELD_IDS["waiting_on_customer_date"]), {}).get("answer", ""),
+            "Name": get(FIELD_IDS["name"]),
+            "Contact": get(FIELD_IDS["contact"]),
+            "Source": get(FIELD_IDS["source"]),
+            "Status": get(FIELD_IDS["status"]),
+            "Notes": get(FIELD_IDS["notes"]),
+            "SurveyScheduledDate": get(FIELD_IDS["survey_scheduled_date"]),
+            "SurveyCompletedDate": get(FIELD_IDS["survey_completed_date"]),
+            "ScheduledDate": get(FIELD_IDS["scheduled_date"]),
+            "InstalledDate": get(FIELD_IDS["installed_date"]),
+            "WaitingOnCustomerDate": get(FIELD_IDS["waiting_on_customer_date"]),
+            "AssignedRep": get(FIELD_IDS["assigned_rep"]) if FIELD_IDS["assigned_rep"] else "",
         })
+    return pd.DataFrame(rows)
 
-    return pd.DataFrame(submissions)
-
-def submit_lead(name, contact, source, status, notes):
-    """Submit new lead to JotForm"""
-    submission_data = {
-        "submission[1]": name,
-        "submission[2]": contact,
-        "submission[3]": source,
-        "submission[4]": status,
-        "submission[5]": notes,
+def submit_lead(name, contact, source, status, notes, rep=None):
+    data = {
+        f"submission[{FIELD_IDS['name']}]": name,
+        f"submission[{FIELD_IDS['contact']}]": contact,
+        f"submission[{FIELD_IDS['source']}]": source,
+        f"submission[{FIELD_IDS['status']}]": status,
+        f"submission[{FIELD_IDS['notes']}]": notes,
     }
-    response = requests.post(
-        f"https://api.jotform.com/form/{FORM_ID}/submissions?apiKey={API_KEY}",
-        data=submission_data,
-    )
-    return response.status_code == 200
+    if FIELD_IDS["assigned_rep"] and rep:
+        data[f"submission[{FIELD_IDS['assigned_rep']}]"] = rep
+    resp = requests.post(f"https://api.jotform.com/form/{FORM_ID}/submissions?apiKey={API_KEY}", data=data)
+    return resp.status_code == 200
 
-def update_lead(submission_id, new_status):
-    """Update status and timestamp of an existing submission"""
+def update_lead(submission_id, updates: dict):
     url = f"https://api.jotform.com/submission/{submission_id}?apiKey={API_KEY}"
-    data = { f"submission[{FIELD_IDS['status']}]": new_status }
-    now = datetime.utcnow().isoformat()
+    resp = requests.post(url, data=updates)
+    return resp.status_code == 200
 
-    if new_status == "Survey Scheduled":
-        data[f"submission[{FIELD_IDS['survey_scheduled_date']}]"] = now
-    elif new_status == "Survey Completed":
-        data[f"submission[{FIELD_IDS['survey_completed_date']}]"] = now
-    elif new_status == "Scheduled":
-        data[f"submission[{FIELD_IDS['scheduled_date']}]"] = now
-    elif new_status == "Installed":
-        data[f"submission[{FIELD_IDS['installed_date']}]"] = now
-    elif new_status == "Waiting on Customer":
-        data[f"submission[{FIELD_IDS['waiting_on_customer_date']}]"] = now
+# ────────────────────────────────
+# TIMESTAMPS & DURATIONS
+# ────────────────────────────────
 
-    response = requests.post(url, data=data)
-    return response.status_code == 200
+def utcnow_iso():
+    return datetime.now(timezone.utc).isoformat()
 
-def calculate_durations(df):
-    """Calculate durations between stages and total time to install"""
+def parse_dt(x):
+    try:
+        return pd.to_datetime(x, utc=True)
+    except Exception:
+        return pd.NaT
+
+def enrich_with_durations(df):
     if df.empty:
-        return df
+        return df.copy()
+    out = df.copy()
+    for col in ["CreatedAt","SurveyScheduledDate","SurveyCompletedDate","ScheduledDate","InstalledDate","WaitingOnCustomerDate"]:
+        out[col] = out[col].apply(parse_dt)
+    out["TotalDaysToInstall"] = (out["InstalledDate"] - out["CreatedAt"]).dt.days
+    out["SurveyDuration"]      = (out["SurveyCompletedDate"] - out["SurveyScheduledDate"]).dt.days
+    out["SchedulingDuration"]  = (out["ScheduledDate"] - out["SurveyCompletedDate"]).dt.days
+    out["InstallWaitDuration"] = (out["InstalledDate"] - out["ScheduledDate"]).dt.days
+    return out
 
-    def parse_date(x):
-        try:
-            return pd.to_datetime(x)
-        except Exception:
-            return pd.NaT
+def build_timeline_segments(row):
+    segs = []
+    C, SS, SC, SD, IDT, W = row["CreatedAt"], row["SurveyScheduledDate"], row["SurveyCompletedDate"], row["ScheduledDate"], row["InstalledDate"], row["WaitingOnCustomerDate"]
+    def add(stage, start, finish):
+        if pd.notna(start) and pd.notna(finish) and finish > start:
+            segs.append({"Stage": stage, "Start": start, "Finish": finish})
+    add("Initial Contact", C, SS)
+    add("Survey", SS, SC)
+    add("Scheduling", SC, SD)
+    add("Install Wait", SD, IDT)
+    if pd.notna(W):
+        nexts = [t for t in [SC, SD, IDT] if pd.notna(t) and t > W]
+        end = min(nexts) if nexts else datetime.now(timezone.utc)
+        add("Waiting on Customer", W, end)
+    return pd.DataFrame(segs)
 
-    for col in ["CreatedAt", "SurveyScheduledDate", "SurveyCompletedDate",
-                "ScheduledDate", "InstalledDate", "WaitingOnCustomerDate"]:
-        df[col] = df[col].apply(parse_date)
+# ────────────────────────────────
+# UI
+# ────────────────────────────────
 
-    df["TotalDaysToInstall"] = (df["InstalledDate"] - df["CreatedAt"]).dt.days
-    df["SurveyDuration"] = (df["SurveyCompletedDate"] - df["SurveyScheduledDate"]).dt.days
-    df["SchedulingDuration"] = (df["ScheduledDate"] - df["SurveyCompletedDate"]).dt.days
-    df["InstallWaitDuration"] = (df["InstalledDate"] - df["ScheduledDate"]).dt.days
-
-    return df
-
-# Streamlit App
 st.set_page_config(page_title="Sales Lead Tracker", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker (JotForm Backend)")
+st.title("📊 Sales Lead Tracker v5")
 
-# Fetch Data
-df = fetch_jotform_data()
-df = calculate_durations(df)
+df_raw = fetch_jotform_data()
+df = enrich_with_durations(df_raw)
 
-# Tabs
-tab1, tab2, tab3 = st.tabs(["📋 Leads Dashboard", "➕ Add New Lead", "✏️ Edit Lead Status"])
+tab_dash, tab_add, tab_edit, tab_timeline = st.tabs([
+    "📋 Dashboard", "➕ Add Lead", "✏️ Edit Lead", "🧭 Timelines"
+])
 
-with tab1:
-    st.subheader("All Leads")
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
+with tab_dash:
+    st.subheader("Leads")
+    st.dataframe(df, use_container_width=True)
 
-        # KPI Metrics
-        installs = df.dropna(subset=["TotalDaysToInstall"])
-        if not installs.empty:
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Average Days to Install", round(installs["TotalDaysToInstall"].mean(), 1))
-            col2.metric("Median Days to Install", installs["TotalDaysToInstall"].median())
-            col3.metric("Fastest Install", installs["TotalDaysToInstall"].min())
-            col4.metric("Slowest Install", installs["TotalDaysToInstall"].max())
+    installs = df.dropna(subset=["TotalDaysToInstall"])
+    if not installs.empty:
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Avg Days to Install", f"{installs['TotalDaysToInstall'].mean():.1f}")
+        col2.metric("Median Days", f"{installs['TotalDaysToInstall'].median():.0f}")
+        col3.metric("Fastest", f"{installs['TotalDaysToInstall'].min():.0f}")
+        col4.metric("Slowest", f"{installs['TotalDaysToInstall'].max():.0f}")
 
-            # Stage averages
-            stage_avg = {
-                "Survey": installs["SurveyDuration"].mean(),
-                "Scheduling": installs["SchedulingDuration"].mean(),
-                "Install Wait": installs["InstallWaitDuration"].mean(),
-            }
-            st.subheader("⏱️ Average Time Spent per Stage (days)")
-            st.bar_chart(pd.Series(stage_avg))
-
-            # Export to CSV
-            st.download_button(
-                "📥 Download Leads with Durations (CSV)",
-                installs.to_csv(index=False).encode("utf-8"),
-                "leads_durations.csv",
-                "text/csv",
-            )
-    else:
-        st.info("No leads found yet.")
-
-with tab2:
+with tab_add:
     st.subheader("Add New Lead")
     with st.form("add_lead"):
         name = st.text_input("Customer Name")
         contact = st.text_input("Contact Info")
-        source = st.selectbox(
-            "How they contacted us",
-            ["Email", "Social Media", "Phone Call", "Walk In", "In Person"],
-        )
-        status = st.selectbox(
-            "Lead Status",
-            ["Survey Scheduled", "Survey Completed", "Scheduled", "Installed", "Waiting on Customer"],
-        )
+        source = st.selectbox("How they contacted us", ["Email","Social Media","Phone Call","Walk In","In Person"])
+        status = st.selectbox("Lead Status", STATUS_OPTIONS)
         notes = st.text_area("Notes")
         submitted = st.form_submit_button("Submit Lead")
-
         if submitted:
-            if submit_lead(name, contact, source, status, notes):
-                st.success("✅ Lead submitted successfully!")
-            else:
-                st.error("❌ Failed to submit lead.")
+            ok = submit_lead(name, contact, source, status, notes)
+            st.success("✅ Lead submitted!") if ok else st.error("❌ Failed to submit lead.")
 
-with tab3:
+with tab_edit:
     st.subheader("Update Lead Status")
     if not df.empty:
-        df["LeadDisplay"] = df["Name"] + " (" + df["Contact"] + ")"
-        selected_lead = st.selectbox("Select a Lead", df["LeadDisplay"])
-        lead_id = df.loc[df["LeadDisplay"] == selected_lead, "SubmissionID"].values[0]
-        new_status = st.selectbox(
-            "New Status",
-            ["Survey Scheduled", "Survey Completed", "Scheduled", "Installed", "Waiting on Customer"]
-        )
-        if st.button("Update Status"):
-            if update_lead(lead_id, new_status):
-                st.success("✅ Lead status updated! Refresh to see changes.")
-            else:
-                st.error("❌ Failed to update lead.")
-    else:
-        st.info("No leads available to edit.")
+        df["LeadDisplay"] = df["Name"].fillna("") + " (" + df["Contact"].fillna("") + ")"
+        lead_pick = st.selectbox("Select Lead", df["LeadDisplay"])
+        rec = df.loc[df["LeadDisplay"] == lead_pick].iloc[0]
+        new_status = st.selectbox("New Status", STATUS_OPTIONS)
+        if st.button("Update Lead"):
+            payload = { f"submission[{FIELD_IDS['status']}]": new_status }
+            # timestamp field
+            status_to_qid = {
+                "Survey Scheduled": FIELD_IDS["survey_scheduled_date"],
+                "Survey Completed": FIELD_IDS["survey_completed_date"],
+                "Scheduled": FIELD_IDS["scheduled_date"],
+                "Installed": FIELD_IDS["installed_date"],
+                "Waiting on Customer": FIELD_IDS["waiting_on_customer_date"],
+            }
+            qid = status_to_qid.get(new_status)
+            if qid:
+                payload[f"submission[{qid}]"] = utcnow_iso()
+            ok = update_lead(rec["SubmissionID"], payload)
+            st.success("✅ Lead updated.") if ok else st.error("❌ Failed.")
+
+with tab_timeline:
+    st.subheader("Timeline View")
+    if not df.empty:
+        segs = []
+        for _, r in df.iterrows():
+            tdf = build_timeline_segments(r)
+            if not tdf.empty:
+                tdf["Lead"] = r["Name"] or r["Contact"]
+                segs.append(tdf)
+        if segs:
+            gdf = pd.concat(segs, ignore_index=True)
+            fig = px.timeline(gdf, x_start="Start", x_end="Finish", y="Lead", color="Stage")
+            fig.update_yaxes(autorange="reversed")
+            st.plotly_chart(fig, use_container_width=True)
