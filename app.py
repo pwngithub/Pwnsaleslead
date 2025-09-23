@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import numpy as np
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -17,12 +18,40 @@ if 'leads_df' not in st.session_state:
         'Name': ['John Doe', 'Jane Smith', 'Peter Jones'],
         'Company': ['Acme Corp', 'Beta Inc.', 'Gamma LLC'],
         'Status': ['New', 'Contacted', 'New'],
-        'Last Contact': [datetime(2023, 10, 25).date(), datetime(2023, 10, 24).date(), datetime(2023, 10, 23).date()],
+        'Last Updated': [datetime.now(), datetime.now(), datetime.now()],
         'Notes': ['Initial inquiry received.', 'Followed up via email.', 'Sent a demo link.']
     })
 
 # --- Main Application UI ---
 st.title("📈 Sales Lead Tracking System")
+
+# --- Lead Status KPIs ---
+st.markdown("### Key Performance Indicators")
+status_list = [
+    "New", "Contacted", "Proposal Sent", "Negotiation", "Closed Won", "Closed Lost",
+    "Survey Added", "Survey Completed", "Prep Scheduled", "Prep Completed", "Install Scheduled"
+]
+kpi_cols = st.columns(len(status_list))
+
+# Calculate time in status for each lead
+now = datetime.now()
+st.session_state.leads_df['Time In Status'] = (now - st.session_state.leads_df['Last Updated']).dt.total_seconds() / 86400  # Convert to days
+
+for i, status in enumerate(status_list):
+    leads_in_status = st.session_state.leads_df[st.session_state.leads_df['Status'] == status]
+    
+    if not leads_in_status.empty:
+        avg_time = leads_in_status['Time In Status'].mean()
+        avg_time_str = f"{avg_time:.1f} days"
+        
+        with kpi_cols[i]:
+            st.metric(
+                label=f"Avg. Time in '{status}'",
+                value=avg_time_str
+            )
+
+# --- View and Manage Leads Section ---
+st.markdown("---")
 st.markdown("### View and Manage Leads")
 
 # Filter and search UI
@@ -45,11 +74,12 @@ filtered_df = filtered_df[filtered_df['Status'].isin(selected_statuses)]
 
 # Display the data table
 st.dataframe(
-    filtered_df,
+    filtered_df[['Lead ID', 'Name', 'Company', 'Status', 'Last Updated', 'Time In Status', 'Notes']],
     use_container_width=True,
     hide_index=True,
     column_config={
-        "Last Contact": st.column_config.DateColumn(format="YYYY-MM-DD")
+        "Last Updated": st.column_config.DatetimeColumn(format="YYYY-MM-DD HH:mm:ss"),
+        "Time In Status": st.column_config.NumberColumn(format="%.2f days")
     }
 )
 
@@ -65,23 +95,10 @@ with st.form("new_lead_form", clear_on_submit=True):
         new_company = st.text_input("Company", placeholder="e.g., Sample Corp", help="Enter the lead's company name.")
         new_status = st.selectbox(
             "Status",
-            options=[
-                "New",
-                "Contacted",
-                "Proposal Sent",
-                "Negotiation",
-                "Closed Won",
-                "Closed Lost",
-                "Survey Added",
-                "Survey Completed",
-                "Prep Scheduled",
-                "Prep Completed",
-                "Install Scheduled"
-            ],
+            options=status_list,
             index=0
         )
     with col2:
-        new_last_contact = st.date_input("Last Contact Date", value=datetime.now().date(), help="Select the date of the last contact.")
         new_notes = st.text_area("Notes", placeholder="e.g., Initial meeting scheduled for next week.", height=100)
 
     # Every form must have a submit button
@@ -91,7 +108,7 @@ with st.form("new_lead_form", clear_on_submit=True):
         # Check if required fields are filled
         if new_name and new_company:
             # Generate a new Lead ID
-            last_id = st.session_state.leads_df['Lead ID'].iloc[-1]
+            last_id = st.session_state.leads_df['Lead ID'].iloc[-1] if not st.session_state.leads_df.empty else 'L000'
             last_number = int(last_id[1:])
             new_id = f'L{last_number + 1:03d}'
 
@@ -101,7 +118,7 @@ with st.form("new_lead_form", clear_on_submit=True):
                 'Name': new_name,
                 'Company': new_company,
                 'Status': new_status,
-                'Last Contact': new_last_contact,
+                'Last Updated': datetime.now(),
                 'Notes': new_notes
             }])
 
@@ -111,6 +128,36 @@ with st.form("new_lead_form", clear_on_submit=True):
             st.rerun()
         else:
             st.error("Please fill out both Name and Company fields.")
+
+
+# --- Update Lead Status Section ---
+st.markdown("---")
+st.markdown("### Update Existing Lead Status")
+with st.form("update_lead_form", clear_on_submit=True):
+    lead_ids = st.session_state.leads_df['Lead ID'].tolist()
+    
+    if lead_ids:
+        col1, col2 = st.columns(2)
+        with col1:
+            lead_to_update = st.selectbox("Select Lead to Update", options=lead_ids)
+            new_status_update = st.selectbox("New Status", options=status_list)
+        
+        with col2:
+            update_notes = st.text_area("Update Notes (Optional)", height=100)
+
+        update_submitted = st.form_submit_button("Update Status")
+
+        if update_submitted:
+            idx = st.session_state.leads_df[st.session_state.leads_df['Lead ID'] == lead_to_update].index[0]
+            st.session_state.leads_df.loc[idx, 'Status'] = new_status_update
+            st.session_state.leads_df.loc[idx, 'Last Updated'] = datetime.now()
+            if update_notes:
+                st.session_state.leads_df.loc[idx, 'Notes'] += f"\n\n--- Status updated to '{new_status_update}' on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n{update_notes}"
+            st.success(f"Lead {lead_to_update} status updated to '{new_status_update}'!")
+            st.rerun()
+    else:
+        st.warning("No leads to update. Please add a new lead first.")
+
 
 # --- Lead Status Visualization ---
 st.markdown("---")
@@ -138,7 +185,7 @@ with col1:
             'Name': ['John Doe', 'Jane Smith', 'Peter Jones'],
             'Company': ['Acme Corp', 'Beta Inc.', 'Gamma LLC'],
             'Status': ['New', 'Contacted', 'New'],
-            'Last Contact': [datetime(2023, 10, 25).date(), datetime(2023, 10, 24).date(), datetime(2023, 10, 23).date()],
+            'Last Updated': [datetime.now(), datetime.now(), datetime.now()],
             'Notes': ['Initial inquiry received.', 'Followed up via email.', 'Sent a demo link.']
         })
         st.rerun()
