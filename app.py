@@ -1,235 +1,124 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
 import numpy as np
+import uuid
 
 # --- Page Configuration ---
-st.set_page_config(
-    page_title="Sales Lead System",
-    page_icon="📈",
-    layout="wide"
-)
+# Use a wide layout and set a title for the page
+st.set_page_config(layout="wide", page_title="Sales & Leads Dashboard", page_icon="📈")
 
-# --- Data Initialization (using st.session_state for persistence) ---
-@st.cache_data
-def get_initial_data():
-    """Initializes the dataframe with some sample data."""
-    now = datetime.now()
-    initial_data = {
-        'Lead ID': ['L001', 'L002', 'L003'],
-        'Name': ['John Doe', 'Jane Smith', 'Peter Jones'],
-        'Company': ['Acme Corp', 'Beta Inc.', 'Gamma LLC'],
-        'Sales Rep': ['Alice', 'Bob', 'Alice'],
-        'Status': ['New', 'Contacted', 'New'],
-        # Store a history of status changes
-        'status_history': [
-            [{'status': 'New', 'timestamp': now - timedelta(days=7)}],
-            [{'status': 'New', 'timestamp': now - timedelta(days=10)}, {'status': 'Contacted', 'timestamp': now - timedelta(days=5)}],
-            [{'status': 'New', 'timestamp': now - timedelta(days=12)}]
-        ],
-        'Notes': ['Initial inquiry received.', 'Followed up via email.', 'Sent a demo link.']
-    }
-    return pd.DataFrame(initial_data)
-
+# --- Session State Management ---
+# Initialize session state variables if they don't exist
+# This is crucial for persisting data across app reruns
 if 'leads_df' not in st.session_state:
-    st.session_state.leads_df = get_initial_data()
+    # Create a sample DataFrame for demonstration
+    sample_data = {
+        'id': [str(uuid.uuid4()) for _ in range(10)],
+        'Lead Name': ['Acme Corp', 'Globex Inc.', 'Initech', 'Hooli', 'Pied Piper', 'Cyberdyne', 'Tyrell Corp', 'Weyland-Yutani', 'Omni Consumer Products', 'Stark Industries'],
+        'Status': ['New', 'Contacted', 'Qualified', 'New', 'Contacted', 'Qualified', 'New', 'Contacted', 'Qualified', 'New'],
+        'Source': ['Website', 'Referral', 'Paid Ad', 'Referral', 'Website', 'Referral', 'Paid Ad', 'Website', 'Referral', 'Paid Ad'],
+        'Value': [15000, 25000, 50000, 10000, 30000, 60000, 5000, 20000, 45000, 80000],
+        'Assigned Rep': ['Sarah', 'John', 'Sarah', 'Alex', 'Alex', 'John', 'Alex', 'Sarah', 'John', 'Alex'],
+        'Notes': ['Initial contact made.', 'Sent follow-up email.', 'Scheduled demo.', 'New lead from contact form.', 'Left a voicemail.', 'High potential lead.', 'Followed up via social media.', 'Responded to our newsletter.', 'Needs a custom quote.', 'Looking for enterprise solution.']
+    }
+    st.session_state['leads_df'] = pd.DataFrame(sample_data)
 
-if 'sales_reps' not in st.session_state:
-    st.session_state.sales_reps = ['Alice', 'Bob', 'Charlie', 'Dana']
+# --- Functions for Data Operations ---
+def add_lead(name, status, source, value, rep, notes):
+    """Adds a new lead to the DataFrame in session state."""
+    new_lead = pd.DataFrame([{
+        'id': str(uuid.uuid4()),
+        'Lead Name': name,
+        'Status': status,
+        'Source': source,
+        'Value': value,
+        'Assigned Rep': rep,
+        'Notes': notes
+    }])
+    st.session_state['leads_df'] = pd.concat([st.session_state['leads_df'], new_lead], ignore_index=True)
+    st.success("Lead added successfully!")
 
-# --- Helper Functions ---
-def calculate_time_in_status(history):
-    """Calculates time spent in the most recent status."""
-    if not history:
-        return np.nan
-    
-    last_update_time = history[-1]['timestamp']
-    return (datetime.now() - last_update_time).total_seconds() / 86400
+def update_lead(updated_df):
+    """Updates the entire DataFrame from the data editor and stores it in session state."""
+    st.session_state['leads_df'] = updated_df
+    st.success("Leads updated successfully!")
 
-def get_total_duration(history, start_status, end_status):
-    """Calculates the duration from one status to another."""
-    start_time = None
-    end_time = None
-    for item in history:
-        if item['status'] == start_status and start_time is None:
-            start_time = item['timestamp']
-        if item['status'] == end_status and end_time is None:
-            end_time = item['timestamp']
-            break
-    
-    if start_time and end_time:
-        return (end_time - start_time).total_seconds() / 86400
-    return np.nan
+# --- Dashboard UI ---
+st.title("Sales & Leads Dashboard 📈")
+st.markdown("Track your sales performance and manage your leads in real-time.")
 
-# --- Main Application UI ---
-st.title("📈 Sales Lead Tracking System")
+# --- Key Performance Indicators (KPIs) ---
+st.header("Key Metrics")
 
-# --- KPI Section ---
-st.markdown("---")
-st.markdown("### Key Performance Indicators")
+# Calculate KPIs
+total_leads = st.session_state['leads_df'].shape[0]
+new_leads = st.session_state['leads_df'][st.session_state['leads_df']['Status'] == 'New'].shape[0]
+total_value = st.session_state['leads_df']['Value'].sum()
+avg_lead_value = st.session_state['leads_df']['Value'].mean()
 
-# Recalculate 'Time In Status' for display
-st.session_state.leads_df['Time In Status'] = st.session_state.leads_df['status_history'].apply(calculate_time_in_status)
-
+# Display KPIs using columns
 col1, col2, col3, col4 = st.columns(4)
 
-# KPI 1: Total Leads
-col1.metric("Total Leads", st.session_state.leads_df.shape[0])
+with col1:
+    st.metric(label="Total Leads", value=total_leads, delta=f"+{new_leads} new")
 
-# KPI 2: Average time from New to Contacted
-new_to_contacted_times = st.session_state.leads_df[
-    st.session_state.leads_df['Status'].isin(['Contacted', 'Proposal Sent', 'Negotiation', 'Closed Won', 'Closed Lost'])
-].apply(lambda row: get_total_duration(row['status_history'], 'New', 'Contacted'), axis=1).dropna()
-avg_time_to_contacted = new_to_contacted_times.mean() if not new_to_contacted_times.empty else 0
-col2.metric("Avg. Time to Contact", f"{avg_time_to_contacted:.1f} days")
+with col2:
+    st.metric(label="Total Pipeline Value", value=f"${total_value:,.0f}")
 
-# KPI 3: Average time to close (from New to Closed Won)
-new_to_closed_times = st.session_state.leads_df[
-    st.session_state.leads_df['Status'] == 'Closed Won'
-].apply(lambda row: get_total_duration(row['status_history'], 'New', 'Closed Won'), axis=1).dropna()
-avg_time_to_close = new_to_closed_times.mean() if not new_to_closed_times.empty else 0
-col3.metric("Avg. Time to Close", f"{avg_time_to_close:.1f} days")
+with col3:
+    st.metric(label="Average Lead Value", value=f"${avg_lead_value:,.0f}")
 
-# KPI 4: Total Closed Won
-closed_won_count = st.session_state.leads_df[st.session_state.leads_df['Status'] == 'Closed Won'].shape[0]
-col4.metric("Total Closed Won", closed_won_count)
+with col4:
+    # Calculate conversion rate from 'Qualified' to a hypothetical 'Closed Won' status
+    qualified_leads = st.session_state['leads_df'][st.session_state['leads_df']['Status'] == 'Qualified'].shape[0]
+    conversion_rate = (qualified_leads / total_leads * 100) if total_leads > 0 else 0
+    st.metric(label="Conversion Rate", value=f"{conversion_rate:.1f}%")
 
-# --- View and Manage Leads Section ---
-st.markdown("---")
-with st.expander("View and Manage Leads", expanded=True):
-    # Filter and search UI
-    st.sidebar.header("Filter and Search")
+# --- Interactive Charts ---
+st.header("Sales & Leads Funnel")
 
-    # Search by name or company
-    search_query = st.sidebar.text_input("Search by Name or Company")
+# Create a bar chart for leads by status
+leads_by_status = st.session_state['leads_df'].groupby('Status').size().reset_index(name='count')
+st.bar_chart(leads_by_status.set_index('Status'))
+
+# Create a pie chart for leads by source
+leads_by_source = st.session_state['leads_df'].groupby('Source').size()
+st.subheader("Leads by Source")
+st.bar_chart(leads_by_source)
+
+# --- Leads Data Table ---
+st.header("Leads Data")
+st.markdown("Use the table below to view and edit your leads. Changes are saved automatically.")
+
+# The data editor allows the user to directly modify the DataFrame
+# The on_change callback is triggered when the user modifies data
+st.data_editor(st.session_state['leads_df'], key="leads_table", on_change=lambda: update_lead(st.session_state.leads_table), use_container_width=True)
+
+
+# --- Add New Lead Form (in a sidebar) ---
+st.sidebar.header("Add New Lead")
+with st.sidebar.form(key='add_lead_form'):
+    lead_name = st.text_input("Lead Name", placeholder="e.g., Jane Doe")
+    lead_status = st.selectbox("Status", ['New', 'Contacted', 'Qualified', 'Closed Won', 'Closed Lost'])
+    lead_source = st.text_input("Source", placeholder="e.g., Website, Referral, etc.")
+    lead_value = st.number_input("Value ($)", min_value=0, value=0)
+    lead_rep = st.selectbox("Assigned Rep", ['Sarah', 'John', 'Alex'])
+    lead_notes = st.text_area("Notes", placeholder="Add any relevant notes about the lead.")
     
-    # Filter by status
-    status_list = [
-        "New", "Contacted", "Proposal Sent", "Negotiation", "Closed Won", "Closed Lost",
-        "Survey Added", "Survey Completed", "Prep Scheduled", "Prep Completed", "Install Scheduled"
-    ]
-    selected_statuses = st.sidebar.multiselect(
-        "Filter by Status",
-        options=status_list,
-        default=status_list
-    )
+    submit_button = st.form_submit_button(label='Add Lead')
     
-    # Filter by sales rep
-    selected_reps = st.sidebar.multiselect(
-        "Filter by Sales Rep",
-        options=st.session_state.sales_reps,
-        default=st.session_state.sales_reps
-    )
-    
-    # Apply filters
-    filtered_df = st.session_state.leads_df[
-        (st.session_state.leads_df['Name'].str.contains(search_query, case=False)) |
-        (st.session_state.leads_df['Company'].str.contains(search_query, case=False))
-    ]
-    filtered_df = filtered_df[filtered_df['Status'].isin(selected_statuses)]
-    filtered_df = filtered_df[filtered_df['Sales Rep'].isin(selected_reps)]
+    if submit_button:
+        if lead_name and lead_status and lead_source and lead_value:
+            add_lead(lead_name, lead_status, lead_source, lead_value, lead_rep, lead_notes)
+        else:
+            st.warning("Please fill in all required fields.")
 
-    # Display the data table with st.data_editor for direct editing
-    st.markdown("### All Leads (Click on a cell to edit)")
-    
-    # Create a copy for editing to avoid modifying session state directly during filtering
-    edited_df = st.data_editor(
-        filtered_df[['Lead ID', 'Name', 'Company', 'Sales Rep', 'Status', 'Time In Status', 'Notes']],
-        width='stretch',
-        hide_index=True,
-        key="lead_editor",
-        column_config={
-            "Status": st.column_config.SelectboxColumn(
-                "Status",
-                options=status_list,
-                required=True,
-            ),
-            "Sales Rep": st.column_config.SelectboxColumn(
-                "Sales Rep",
-                options=st.session_state.sales_reps,
-                required=True
-            ),
-            "Time In Status": st.column_config.NumberColumn(
-                "Time In Status (Days)",
-                format="%.2f days",
-                help="Time since the lead's last status change.",
-                disabled=True
-            )
-        }
-    )
-
-    # Update session state with the edited DataFrame
-    # Note: This is a simplified update logic. A more robust app would handle merges.
-    if not edited_df.equals(filtered_df):
-        for _, row in edited_df.iterrows():
-            lead_id = row['Lead ID']
-            original_status = st.session_state.leads_df.loc[st.session_state.leads_df['Lead ID'] == lead_id, 'Status'].iloc[0]
-            new_status = row['Status']
-            
-            # Update the main DataFrame
-            st.session_state.leads_df.loc[st.session_state.leads_df['Lead ID'] == lead_id, ['Name', 'Company', 'Sales Rep', 'Status', 'Notes']] = \
-                [row['Name'], row['Company'], row['Sales Rep'], row['Status'], row['Notes']]
-
-            # If the status changed, update the history
-            if original_status != new_status:
-                history_list = st.session_state.leads_df.loc[st.session_state.leads_df['Lead ID'] == lead_id, 'status_history'].iloc[0]
-                history_list.append({'status': new_status, 'timestamp': datetime.now()})
-                st.session_state.leads_df.loc[st.session_state.leads_df['Lead ID'] == lead_id, 'status_history'] = [history_list]
-
-        st.success("Leads updated successfully!")
-        st.rerun()
-
-# --- Lead Status Visualization ---
-st.markdown("---")
-with st.expander("Lead Status Visualization", expanded=True):
-    col1, col2 = st.columns([1, 2])
-    
-    # Count the number of leads for each status
-    status_counts = st.session_state.leads_df['Status'].value_counts().reset_index()
-    status_counts.columns = ['Status', 'Count']
-    
-    with col1:
-        st.markdown("### Lead Distribution by Status")
-        st.dataframe(status_counts, hide_index=True, width='stretch')
-
-    with col2:
-        st.markdown("### Lead Distribution Chart")
-        # Use a pie chart for better visualization of proportions
-        st.bar_chart(status_counts.set_index('Status'))
-
-# --- Add New Lead Section ---
-st.markdown("---")
-with st.expander("Add a New Lead", expanded=False):
-    with st.form("new_lead_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            new_name = st.text_input("Name", placeholder="e.g., Jane Doe")
-            new_company = st.text_input("Company", placeholder="e.g., Sample Corp")
-            new_rep = st.selectbox("Sales Rep", options=st.session_state.sales_reps)
-        with col2:
-            new_status = st.selectbox("Status", options=status_list, index=0)
-            new_notes = st.text_area("Notes", placeholder="e.g., Initial meeting scheduled for next week.", height=100)
-
-        submitted = st.form_submit_button("Add Lead")
-
-        if submitted:
-            if new_name and new_company:
-                last_id = st.session_state.leads_df['Lead ID'].iloc[-1] if not st.session_state.leads_df.empty else 'L000'
-                last_number = int(last_id[1:])
-                new_id = f'L{last_number + 1:03d}'
-                new_row = pd.DataFrame([{
-                    'Lead ID': new_id,
-                    'Name': new_name,
-                    'Company': new_company,
-                    'Sales Rep': new_rep,
-                    'Status': new_status,
-                    'status_history': [{'status': new_status, 'timestamp': datetime.now()}],
-                    'Notes': new_notes
-                }])
-                st.session_state.leads_df = pd.concat([st.session_state.leads_df, new_row], ignore_index=True)
-                st.success("New lead added successfully!")
-                st.rerun()
-            else:
-                st.error("Please fill out both Name and Company fields.")
-
-# --- Action Buttons ---
+# --- Explanation and How-to-run ---
+st.markdown("""
+---
+### How to Use this Dashboard
+1.  **Run the app:** Save this code as `app.py` and run it from your terminal using the command `streamlit run app.py`.
+2.  **View and Edit Data:** The main table allows you to directly edit existing lead data. Any changes you make will be saved automatically.
+3.  **Add New Leads:** Use the form in the sidebar to input information for new leads.
+4.  **Analyze Metrics:** The key metrics and charts at the top will automatically update as you add or edit data, giving you a real-time view of your sales funnel.
+""")
