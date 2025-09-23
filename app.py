@@ -22,7 +22,9 @@ def fetch_jotform_data():
     records = []
     for sub in subs:
         ans = sub.get("answers", {})
-        addr_ans = ans.get(str(FIELD_ID["address"]), {}).get("answer", {})
+        addr_raw = ans.get(str(FIELD_ID["address"]), {}).get("answer", {})
+        if not isinstance(addr_raw, dict):
+            addr_raw = {}
         records.append({
             "SubmissionID": sub.get("id"),
             "Name": ans.get(str(FIELD_ID["name"]), {}).get("answer"),
@@ -30,11 +32,11 @@ def fetch_jotform_data():
             "Status": ans.get(str(FIELD_ID["status"]), {}).get("answer"),
             "ServiceType": ans.get(str(FIELD_ID["service_type"]), {}).get("answer"),
             "LostReason": ans.get(str(FIELD_ID["lost_reason"]), {}).get("answer"),
-            "Street": addr_ans.get("addr_line1"),
-            "Street2": addr_ans.get("addr_line2"),
-            "City": addr_ans.get("city"),
-            "State": addr_ans.get("state"),
-            "Postal": addr_ans.get("postal")
+            "Street": addr_raw.get("addr_line1"),
+            "Street2": addr_raw.get("addr_line2"),
+            "City": addr_raw.get("city"),
+            "State": addr_raw.get("state"),
+            "Postal": addr_raw.get("postal")
         })
     return pd.DataFrame(records)
 
@@ -52,8 +54,8 @@ def add_submission(payload: dict):
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.8.1", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.8.1 — Address + Rerun Fix")
+st.set_page_config(page_title="Sales Lead Tracker v19.8.2", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.8.2 — Safe Address Handling")
 
 df = fetch_jotform_data()
 if df.empty:
