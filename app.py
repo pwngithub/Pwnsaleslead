@@ -36,11 +36,14 @@ def highlight_breach(row):
         return ["background-color: #ffcccc"]*len(row)
     return [""]*len(row)
 
-st.set_page_config(page_title="Sales Lead Tracker v12", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v12 — Row Highlighting for SLA Breaches")
+st.set_page_config(page_title="Sales Lead Tracker v13", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v13 — Dynamic KPI Updates with Filters")
 
 # Sidebar controls
 refresh_interval = st.sidebar.selectbox("Auto-refresh interval",[30,60,120,300],index=1)
+refresh_now = st.sidebar.button("🔄 Refresh Now")
+if refresh_now:
+    st.experimental_rerun()
 st_autorefresh(interval=refresh_interval*1000,key="auto_refresh")
 
 df = pd.read_csv("sample_tickets.csv")
@@ -79,31 +82,40 @@ violations = {
     "Installed": (filtered["InstallSLA"]=="❌").sum(),
     "Waiting on Customer": 0,
 }
-cols = st.columns(len(status_counts))
-for i,(status,count) in enumerate(status_counts.items()):
-    v = violations.get(status,0)
-    cols[i].metric(status,f"{count} total",f"{v} late" if v>0 else "On track")
+if not status_counts.empty:
+    cols = st.columns(len(status_counts))
+    for i,(status,count) in enumerate(status_counts.items()):
+        v = violations.get(status,0)
+        cols[i].metric(status,f"{count} total",f"{v} late" if v>0 else "On track")
+else:
+    st.info("No tickets match filters.")
 
-# KPI Metrics
-st.subheader("📈 KPI Metrics (Filtered)")
-installs = filtered.dropna(subset=["TotalDaysToInstall"])
-if not installs.empty:
+# KPI Metrics (live with filters)
+st.subheader("📈 KPI Metrics (Filtered — Live Updates)")
+if not filtered.empty:
+    installs = filtered.dropna(subset=["TotalDaysToInstall"])
     col1,col2,col3,col4,col5 = st.columns(5)
-    col1.metric("Avg Days to Install",f"{installs['TotalDaysToInstall'].mean():.1f}")
-    col2.metric("Median Days",f"{installs['TotalDaysToInstall'].median():.0f}")
-    col3.metric("Fastest",f"{installs['TotalDaysToInstall'].min():.0f}")
-    col4.metric("Slowest",f"{installs['TotalDaysToInstall'].max():.0f}")
+    if not installs.empty:
+        col1.metric("Avg Days to Install",f"{installs['TotalDaysToInstall'].mean():.1f}")
+        col2.metric("Median Days",f"{installs['TotalDaysToInstall'].median():.0f}")
+        col3.metric("Fastest",f"{installs['TotalDaysToInstall'].min():.0f}")
+        col4.metric("Slowest",f"{installs['TotalDaysToInstall'].max():.0f}")
     breaches = (filtered["SurveySLA"].eq("❌")|filtered["SchedulingSLA"].eq("❌")|filtered["InstallSLA"].eq("❌")).sum()
     total=len(filtered); rate=100*(total-breaches)/total if total else 0
     col5.metric("SLA Compliance",f"{rate:.1f}%")
+else:
+    st.info("No KPI data — no tickets match filters.")
 
 # Funnel
 st.subheader("🔻 Funnel View (Filtered)")
-stage_order = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"]
-funnel_data = filtered["Status"].value_counts().reindex(stage_order,fill_value=0)
-funnel_df = pd.DataFrame({"Stage":funnel_data.index,"Count":funnel_data.values})
-fig_funnel = px.funnel(funnel_df,x="Count",y="Stage")
-st.plotly_chart(fig_funnel,use_container_width=True)
+if not filtered.empty:
+    stage_order = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"]
+    funnel_data = filtered["Status"].value_counts().reindex(stage_order,fill_value=0)
+    funnel_df = pd.DataFrame({"Stage":funnel_data.index,"Count":funnel_data.values})
+    fig_funnel = px.funnel(funnel_df,x="Count",y="Stage")
+    st.plotly_chart(fig_funnel,use_container_width=True)
+else:
+    st.info("No funnel data for current filters.")
 
 # Timelines
 st.subheader("🧭 SLA Timelines (Filtered)")
@@ -121,12 +133,15 @@ if segments:
     fig_tl.update_yaxes(autorange="reversed")
     st.plotly_chart(fig_tl,use_container_width=True)
 else:
-    st.info("No timeline data")
+    st.info("No timeline data for current filters.")
 
 # Table
 st.subheader("📋 Ticket Table with SLA (Filtered & Highlighted)")
-show=filtered[["Name","Contact","Source","Status","SurveyDuration","SurveySLA","SchedulingDuration","SchedulingSLA","InstallWaitDuration","InstallSLA","TotalDaysToInstall"]]
-styled=show.style.apply(highlight_breach,axis=1)
-st.dataframe(styled,use_container_width=True)
+if not filtered.empty:
+    show=filtered[["Name","Contact","Source","Status","SurveyDuration","SurveySLA","SchedulingDuration","SchedulingSLA","InstallWaitDuration","InstallSLA","TotalDaysToInstall"]]
+    styled=show.style.apply(highlight_breach,axis=1)
+    st.dataframe(styled,use_container_width=True)
+else:
+    st.info("No tickets to show for current filters.")
 
 st.caption(f"🔄 Auto-refresh every {refresh_interval} seconds. Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
