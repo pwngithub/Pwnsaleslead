@@ -43,24 +43,35 @@ def fetch_jotform_data():
     return pd.DataFrame(records)
 
 def update_submission(submission_id: str, payload: dict):
-    # ⚠️ JotForm does not allow editing answers directly, only meta
-    # Placeholder if needed for deletion/recreate approach
     url = f"{JOTFORM_API}/submission/{submission_id}?apiKey={API_KEY}"
-    form = {f"q{qid}": val for qid, val in payload.items() if val is not None}
+    form = {}
+    for qid, val in payload.items():
+        if qid == FIELD_ID["address"] and isinstance(val, dict):
+            for subfield, subval in val.items():
+                form[f"q{qid}[{subfield}]"] = subval
+        else:
+            if val is not None:
+                form[f"q{qid}"] = val
     resp = requests.post(url, data=form, timeout=30)
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
 def add_submission(payload: dict):
-    # FIX: JotForm requires q{field_id} keys instead of submission[{id}]
-    form = {f"q{qid}": val for qid, val in payload.items() if val is not None}
+    form = {}
+    for qid, val in payload.items():
+        if qid == FIELD_ID["address"] and isinstance(val, dict):
+            for subfield, subval in val.items():
+                form[f"q{qid}[{subfield}]"] = subval
+        else:
+            if val is not None:
+                form[f"q{qid}"] = val
     url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apiKey={API_KEY}"
     resp = requests.post(url, data=form, timeout=30)
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.2", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.2 — Add Ticket Fix")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.3", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.3 — Add Ticket Address Fix")
 
 df = fetch_jotform_data()
 if df.empty:
