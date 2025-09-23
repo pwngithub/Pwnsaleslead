@@ -52,8 +52,8 @@ def add_submission(payload: dict):
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.8", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.8 — Address Support")
+st.set_page_config(page_title="Sales Lead Tracker v19.8.1", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.8.1 — Address + Rerun Fix")
 
 df = fetch_jotform_data()
 if df.empty:
@@ -94,7 +94,9 @@ with tab_add:
         }
         ok, resp = add_submission(payload)
         if ok:
-            st.success("✅ Ticket added."); st.json(resp); st.experimental_rerun()
+            st.success("✅ Ticket added.")
+            st.json(resp)
+            st.rerun()
         else:
             st.error("❌ Failed to add ticket."); st.write(resp)
 
@@ -133,7 +135,9 @@ with tab_edit:
                 }
                 ok, resp = update_submission(curr["SubmissionID"], payload)
                 if ok:
-                    st.success("✅ Ticket updated."); st.json(resp); st.experimental_rerun()
+                    st.success("✅ Ticket updated.")
+                    st.json(resp)
+                    st.rerun()
                 else:
                     st.error("❌ Failed to update."); st.write(resp)
 
