@@ -82,23 +82,14 @@ funnel_data = df["Status"].value_counts().reindex(stage_order, fill_value=0)
 fig_funnel = px.funnel(funnel_data.reset_index(), x="Status", y="index", labels={"index":"Stage","Status":"Count"})
 st.plotly_chart(fig_funnel, use_container_width=True)
 
-# Timeline Bars
-st.subheader("🧭 SLA Timelines")
-segments = []
-for _,r in df.iterrows():
-    if pd.notna(r["SurveyScheduledDate"]) and pd.notna(r["SurveyCompletedDate"]):
-        segments.append({"Lead":r["Name"],"Stage":"Survey","Start":r["SurveyScheduledDate"],"Finish":r["SurveyCompletedDate"],"Color":"red" if r["SurveySLA"]=="❌" else "green"})
-    if pd.notna(r["SurveyCompletedDate"]) and pd.notna(r["ScheduledDate"]):
-        segments.append({"Lead":r["Name"],"Stage":"Scheduling","Start":r["SurveyCompletedDate"],"Finish":r["ScheduledDate"],"Color":"red" if r["SchedulingSLA"]=="❌" else "green"})
-    if pd.notna(r["ScheduledDate"]) and pd.notna(r["InstalledDate"]):
-        segments.append({"Lead":r["Name"],"Stage":"Install Wait","Start":r["ScheduledDate"],"Finish":r["InstalledDate"],"Color":"red" if r["InstallSLA"]=="❌" else "green"})
-if segments:
-    segdf = pd.DataFrame(segments)
-    fig_tl = px.timeline(segdf, x_start="Start", x_end="Finish", y="Lead", color="Color", facet_row="Stage")
-    fig_tl.update_yaxes(autorange="reversed")
-    st.plotly_chart(fig_tl, use_container_width=True)
-else:
-    st.info("No timeline data available.")
+# Funnel Chart
+st.subheader("🔻 Funnel View")
+stage_order = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"]
+funnel_data = df["Status"].value_counts().reindex(stage_order, fill_value=0)
+funnel_df = pd.DataFrame({"Stage": funnel_data.index, "Count": funnel_data.values})
+fig_funnel = px.funnel(funnel_df, x="Count", y="Stage", labels={"Stage":"Stage","Count":"Count"})
+st.plotly_chart(fig_funnel, use_container_width=True)
+
 
 # Ticket Table
 st.subheader("📋 Ticket Table with SLA")
