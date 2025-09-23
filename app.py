@@ -187,9 +187,24 @@ with tab_timeline:
 with tab_export:
     st.subheader("Export SLA Report")
     if not df.empty:
+        export_df = df.copy()
+        # Convert datetime columns to strings
+        for col in ["CreatedAt","SurveyScheduledDate","SurveyCompletedDate",
+                    "ScheduledDate","InstalledDate","WaitingOnCustomerDate"]:
+            if col in export_df.columns:
+                export_df[col] = export_df[col].astype(str).replace("NaT", "")
+        # Replace NA with empty
+        export_df = export_df.fillna("")
+
         output = BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as xw:
-            df.to_excel(xw, index=False, sheet_name="Leads")
-        st.download_button("📥 Download SLA Report (Excel)", output.getvalue(), "sla_report.xlsx")
+            export_df.to_excel(xw, index=False, sheet_name="Leads")
+
+        st.download_button(
+            "📥 Download SLA Report (Excel)",
+            output.getvalue(),
+            "sla_report.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     else:
         st.info("No data to export.")
