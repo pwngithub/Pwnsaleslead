@@ -36,8 +36,8 @@ def color_sla(val):
         return "background-color: #ffcccc"
     return ""
 
-st.set_page_config(page_title="Sales Lead Tracker v15", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v15 — Stable Highlighting (No AgGrid)")
+st.set_page_config(page_title="Sales Lead Tracker v16", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v16 — Average Duration per Status")
 
 # Sidebar controls
 refresh_interval = st.sidebar.selectbox("Auto-refresh interval",[30,60,120,300],index=1)
@@ -106,6 +106,25 @@ if not filtered.empty:
 else:
     st.info("No KPI data — no tickets match filters.")
 
+# NEW: Average Duration per Status
+st.subheader("⏱ Average Duration by Status (Filtered)")
+if not filtered.empty:
+    col1, col2, col3 = st.columns(3)
+    if filtered["SurveyDuration"].notna().any():
+        col1.metric("Survey Avg (days)", f"{filtered['SurveyDuration'].dropna().mean():.1f}")
+    else:
+        col1.metric("Survey Avg (days)", "—")
+    if filtered["SchedulingDuration"].notna().any():
+        col2.metric("Scheduling Avg (days)", f"{filtered['SchedulingDuration'].dropna().mean():.1f}")
+    else:
+        col2.metric("Scheduling Avg (days)", "—")
+    if filtered["InstallWaitDuration"].notna().any():
+        col3.metric("Install Wait Avg (days)", f"{filtered['InstallWaitDuration'].dropna().mean():.1f}")
+    else:
+        col3.metric("Install Wait Avg (days)", "—")
+else:
+    st.info("No duration data — no tickets match filters.")
+
 # Funnel
 st.subheader("🔻 Funnel View (Filtered)")
 if not filtered.empty:
@@ -135,7 +154,7 @@ if segments:
 else:
     st.info("No timeline data for current filters.")
 
-# Table (Safe Styling)
+# Table
 st.subheader("📋 Ticket Table with SLA (Filtered & Highlighted)")
 if not filtered.empty:
     show=filtered[["Name","Contact","Source","Status","SurveyDuration","SurveySLA","SchedulingDuration","SchedulingSLA","InstallWaitDuration","InstallSLA","TotalDaysToInstall"]]
