@@ -1,6 +1,51 @@
 SubmissionID,CreatedAt,Name,Contact,Source,Status,Notes,SurveyScheduledDate,SurveyCompletedDate,ScheduledDate,InstalledDate,WaitingOnCustomerDate
-1,2025-09-11 14:53:58.067937+00:00,Alice,alice@example.com,Email,Survey Scheduled,Initial contact made.,2025-09-11 14:53:58.067937+00:00,,,,
-2,2025-09-15 14:53:58.067937+00:00,Bob,bob@example.com,Phone Call,Survey Completed,Survey done.,2025-09-14 14:53:58.067937+00:00,2025-09-15 14:53:58.067937+00:00,,,
-3,2025-09-17 14:53:58.067937+00:00,Charlie,charlie@example.com,Walk In,Scheduled,Waiting for install.,2025-09-14 14:53:58.067937+00:00,2025-09-15 14:53:58.067937+00:00,2025-09-17 14:53:58.067937+00:00,,
-4,2025-09-08 14:53:58.067937+00:00,Diana,diana@example.com,Social Media,Installed,Install finished late.,2025-09-09 14:53:58.067937+00:00,2025-09-11 14:53:58.067937+00:00,2025-09-13 14:53:58.067937+00:00,2025-09-21 14:53:58.067937+00:00,
-5,2025-09-16 14:53:58.067937+00:00,Eve,eve@example.com,In Person,Waiting on Customer,Customer delaying.,2025-09-17 14:53:58.067937+00:00,,,,2025-09-20 14:53:58.067937+00:00
+1,2025-08-29 14:59:48.402311+00:00,Alice0,alice0@example.com,Social Media,Waiting on Customer,Auto-generated ticket 1,2025-08-29 14:59:48.402311+00:00,,,,2025-09-19 14:59:48.402311+00:00
+2,2025-09-17 14:59:48.402311+00:00,Peggy1,peggy1@example.com,Email,Scheduled,Auto-generated ticket 2,2025-09-19 14:59:48.402311+00:00,2025-09-23 14:59:48.402311+00:00,2025-09-28 14:59:48.402311+00:00,,
+3,2025-09-16 14:59:48.402311+00:00,Judy2,judy2@example.com,In Person,Survey Completed,Auto-generated ticket 3,2025-09-16 14:59:48.402311+00:00,2025-09-21 14:59:48.402311+00:00,,,
+4,2025-08-29 14:59:48.402311+00:00,Ivan3,ivan3@example.com,Email,Survey Scheduled,Auto-generated ticket 4,2025-08-31 14:59:48.402311+00:00,,,,
+5,2025-09-12 14:59:48.402311+00:00,Heidi4,heidi4@example.com,Phone Call,Installed,Auto-generated ticket 5,2025-09-14 14:59:48.402311+00:00,2025-09-17 14:59:48.402311+00:00,2025-09-19 14:59:48.402311+00:00,2025-09-20 14:59:48.402311+00:00,
+6,2025-09-16 14:59:48.402311+00:00,Trent5,trent5@example.com,Email,Scheduled,Auto-generated ticket 6,2025-09-16 14:59:48.402311+00:00,2025-09-19 14:59:48.402311+00:00,2025-09-20 14:59:48.402311+00:00,,
+7,2025-08-24 14:59:48.402311+00:00,Grace6,grace6@example.com,Email,Survey Completed,Auto-generated ticket 7,2025-08-26 14:59:48.402311+00:00,2025-08-30 14:59:48.402311+00:00,,,
+8,2025-09-16 14:59:48.402311+00:00,Alice7,alice7@example.com,In Person,Survey Scheduled,Auto-generated ticket 8,2025-09-16 14:59:48.402311+00:00,,,,
+9,2025-09-03 14:59:48.402311+00:00,Diana8,diana8@example.com,In Person,Survey Scheduled,Auto-generated ticket 9,2025-09-05 14:59:48.402311+00:00,,,,
+10,2025-09-03 14:59:48.402311+00:00,Karl9,karl9@example.com,Phone Call,Survey Completed,Auto-generated ticket 10,2025-09-05 14:59:48.402311+00:00,2025-09-07 14:59:48.402311+00:00,,,
+11,2025-08-25 14:59:48.402311+00:00,Trent10,trent10@example.com,In Person,Scheduled,Auto-generated ticket 11,2025-08-27 14:59:48.402311+00:00,2025-08-28 14:59:48.402311+00:00,2025-09-02 14:59:48.402311+00:00,,
+12,2025-09-08 14:59:48.402311+00:00,Trent11,trent11@example.com,Social Media,Survey Completed,Auto-generated ticket 12,2025-09-11 14:59:48.402311+00:00,2025-09-11 14:59:48.402311+00:00,,,
+13,2025-09-03 14:59:48.402311+00:00,Niaj12,niaj12@example.com,Phone Call,Survey Completed,Auto-generated ticket 13,2025-09-06 14:59:48.402311+00:00,2025-09-08 14:59:48.402311+00:00,,,
+14,2025-09-10 14:59:48.402311+00:00,Ivan13,ivan13@example.com,Email,Waiting on Customer,Auto-generated ticket 14,2025-09-10 14:59:48.402311+00:00,,,,2025-09-16 14:59:48.402311+00:00
+15,2025-08-31 14:59:48.402311+00:00,Zack14,zack14@example.com,Phone Call,Survey Completed,Auto-generated ticket 15,2025-08-31 14:59:48.402311+00:00,2025-09-01 14:59:48.402311+00:00,,,
+16,2025-08-30 14:59:48.402311+00:00,Trent15,trent15@example.com,In Person,Survey Scheduled,Auto-generated ticket 16,2025-08-30 14:59:48.402311+00:00,,,,
+17,2025-09-16 14:59:48.402311+00:00,Grace16,grace16@example.com,In Person,Installed,Auto-generated ticket 17,2025-09-17 14:59:48.402311+00:00,2025-09-21 14:59:48.402311+00:00,2025-09-24 14:59:48.402311+00:00,2025-09-24 14:59:48.402311+00:00,
+18,2025-09-04 14:59:48.402311+00:00,Grace17,grace17@example.com,Social Media,Installed,Auto-generated ticket 18,2025-09-06 14:59:48.402311+00:00,2025-09-09 14:59:48.402311+00:00,2025-09-14 14:59:48.402311+00:00,2025-09-22 14:59:48.402311+00:00,
+19,2025-09-05 14:59:48.402311+00:00,Niaj18,niaj18@example.com,In Person,Scheduled,Auto-generated ticket 19,2025-09-05 14:59:48.402311+00:00,2025-09-08 14:59:48.402311+00:00,2025-09-08 14:59:48.402311+00:00,,
+20,2025-09-06 14:59:48.402311+00:00,Quinn19,quinn19@example.com,Phone Call,Waiting on Customer,Auto-generated ticket 20,2025-09-06 14:59:48.402311+00:00,,,,2025-09-22 14:59:48.402311+00:00
+21,2025-09-04 14:59:48.402311+00:00,Niaj20,niaj20@example.com,Email,Scheduled,Auto-generated ticket 21,2025-09-07 14:59:48.402311+00:00,2025-09-12 14:59:48.402311+00:00,2025-09-16 14:59:48.402311+00:00,,
+22,2025-09-08 14:59:48.402311+00:00,Olivia21,olivia21@example.com,Walk In,Scheduled,Auto-generated ticket 22,2025-09-08 14:59:48.402311+00:00,2025-09-12 14:59:48.402311+00:00,2025-09-12 14:59:48.402311+00:00,,
+23,2025-08-30 14:59:48.402311+00:00,Olivia22,olivia22@example.com,Social Media,Survey Scheduled,Auto-generated ticket 23,2025-09-02 14:59:48.402311+00:00,,,,
+24,2025-09-08 14:59:48.402311+00:00,Uma23,uma23@example.com,Walk In,Survey Completed,Auto-generated ticket 24,2025-09-11 14:59:48.402311+00:00,2025-09-12 14:59:48.402311+00:00,,,
+25,2025-08-26 14:59:48.402311+00:00,Olivia24,olivia24@example.com,Social Media,Waiting on Customer,Auto-generated ticket 25,2025-08-28 14:59:48.402311+00:00,,,,2025-09-17 14:59:48.402311+00:00
+26,2025-09-01 14:59:48.402311+00:00,Quinn25,quinn25@example.com,Email,Scheduled,Auto-generated ticket 26,2025-09-03 14:59:48.402311+00:00,2025-09-08 14:59:48.402311+00:00,2025-09-13 14:59:48.402311+00:00,,
+27,2025-09-02 14:59:48.402311+00:00,Olivia26,olivia26@example.com,Social Media,Survey Scheduled,Auto-generated ticket 27,2025-09-03 14:59:48.402311+00:00,,,,
+28,2025-08-29 14:59:48.402311+00:00,Bob27,bob27@example.com,Phone Call,Survey Completed,Auto-generated ticket 28,2025-08-31 14:59:48.402311+00:00,2025-09-05 14:59:48.402311+00:00,,,
+29,2025-09-07 14:59:48.402311+00:00,Trent28,trent28@example.com,Walk In,Survey Scheduled,Auto-generated ticket 29,2025-09-07 14:59:48.402311+00:00,,,,
+30,2025-09-14 14:59:48.402311+00:00,Judy29,judy29@example.com,Social Media,Survey Completed,Auto-generated ticket 30,2025-09-14 14:59:48.402311+00:00,2025-09-14 14:59:48.402311+00:00,,,
+31,2025-09-17 14:59:48.402311+00:00,Ruth30,ruth30@example.com,Walk In,Survey Scheduled,Auto-generated ticket 31,2025-09-18 14:59:48.402311+00:00,,,,
+32,2025-09-17 14:59:48.402311+00:00,Trent31,trent31@example.com,Walk In,Survey Scheduled,Auto-generated ticket 32,2025-09-20 14:59:48.402311+00:00,,,,
+33,2025-09-01 14:59:48.402311+00:00,Grace32,grace32@example.com,Email,Waiting on Customer,Auto-generated ticket 33,2025-09-04 14:59:48.402311+00:00,,,,2025-09-18 14:59:48.402311+00:00
+34,2025-09-13 14:59:48.402311+00:00,Wendy33,wendy33@example.com,Phone Call,Waiting on Customer,Auto-generated ticket 34,2025-09-14 14:59:48.402311+00:00,,,,2025-09-17 14:59:48.402311+00:00
+35,2025-09-14 14:59:48.402311+00:00,Eve34,eve34@example.com,Social Media,Survey Completed,Auto-generated ticket 35,2025-09-15 14:59:48.402311+00:00,2025-09-20 14:59:48.402311+00:00,,,
+36,2025-09-17 14:59:48.402311+00:00,Karl35,karl35@example.com,Walk In,Survey Scheduled,Auto-generated ticket 36,2025-09-20 14:59:48.402311+00:00,,,,
+37,2025-09-16 14:59:48.402311+00:00,Alice36,alice36@example.com,In Person,Scheduled,Auto-generated ticket 37,2025-09-16 14:59:48.402311+00:00,2025-09-19 14:59:48.402311+00:00,2025-09-22 14:59:48.402311+00:00,,
+38,2025-09-02 14:59:48.402311+00:00,Quinn37,quinn37@example.com,Walk In,Waiting on Customer,Auto-generated ticket 38,2025-09-03 14:59:48.402311+00:00,,,,2025-09-16 14:59:48.402311+00:00
+39,2025-09-17 14:59:48.402311+00:00,Peggy38,peggy38@example.com,Walk In,Survey Completed,Auto-generated ticket 39,2025-09-19 14:59:48.402311+00:00,2025-09-24 14:59:48.402311+00:00,,,
+40,2025-09-07 14:59:48.402311+00:00,Mallory39,mallory39@example.com,Social Media,Survey Completed,Auto-generated ticket 40,2025-09-08 14:59:48.402311+00:00,2025-09-08 14:59:48.402311+00:00,,,
+41,2025-09-17 14:59:48.402311+00:00,Grace40,grace40@example.com,In Person,Survey Scheduled,Auto-generated ticket 41,2025-09-19 14:59:48.402311+00:00,,,,
+42,2025-08-29 14:59:48.402311+00:00,Zack41,zack41@example.com,In Person,Installed,Auto-generated ticket 42,2025-09-01 14:59:48.402311+00:00,2025-09-04 14:59:48.402311+00:00,2025-09-06 14:59:48.402311+00:00,2025-09-14 14:59:48.402311+00:00,
+43,2025-09-03 14:59:48.402311+00:00,Niaj42,niaj42@example.com,Walk In,Scheduled,Auto-generated ticket 43,2025-09-04 14:59:48.402311+00:00,2025-09-08 14:59:48.402311+00:00,2025-09-10 14:59:48.402311+00:00,,
+44,2025-08-24 14:59:48.402311+00:00,Wendy43,wendy43@example.com,Phone Call,Scheduled,Auto-generated ticket 44,2025-08-25 14:59:48.402311+00:00,2025-08-29 14:59:48.402311+00:00,2025-08-31 14:59:48.402311+00:00,,
+45,2025-08-25 14:59:48.402311+00:00,Yvonne44,yvonne44@example.com,Social Media,Scheduled,Auto-generated ticket 45,2025-08-27 14:59:48.402311+00:00,2025-08-27 14:59:48.402311+00:00,2025-08-29 14:59:48.402311+00:00,,
+46,2025-09-16 14:59:48.402311+00:00,Zack45,zack45@example.com,Social Media,Waiting on Customer,Auto-generated ticket 46,2025-09-19 14:59:48.402311+00:00,,,,2025-09-19 14:59:48.402311+00:00
+47,2025-09-01 14:59:48.402311+00:00,Ruth46,ruth46@example.com,Walk In,Survey Scheduled,Auto-generated ticket 47,2025-09-01 14:59:48.402311+00:00,,,,
+48,2025-08-26 14:59:48.402311+00:00,Mallory47,mallory47@example.com,Social Media,Waiting on Customer,Auto-generated ticket 48,2025-08-28 14:59:48.402311+00:00,,,,2025-09-18 14:59:48.402311+00:00
+49,2025-09-11 14:59:48.402311+00:00,Mallory48,mallory48@example.com,In Person,Survey Completed,Auto-generated ticket 49,2025-09-12 14:59:48.402311+00:00,2025-09-16 14:59:48.402311+00:00,,,
+50,2025-09-06 14:59:48.402311+00:00,Bob49,bob49@example.com,Phone Call,Waiting on Customer,Auto-generated ticket 50,2025-09-08 14:59:48.402311+00:00,,,,2025-09-23 14:59:48.402311+00:00
