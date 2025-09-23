@@ -2,8 +2,7 @@
 import streamlit as st
 import pandas as pd
 import requests
-import datetime
-import csv, os
+import csv
 from config import API_KEY, FORM_ID, FIELD_ID
 
 JOTFORM_API = "https://api.jotform.com"
@@ -18,8 +17,7 @@ def fetch_jotform_data():
     url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apikey={API_KEY}"
     r = requests.get(url, timeout=30)
     r.raise_for_status()
-    data = r.json()
-    subs = data.get("content", [])
+    subs = r.json().get("content", [])
     records = []
     for sub in subs:
         ans = sub.get("answers") or {}
@@ -54,7 +52,11 @@ def fetch_jotform_data():
             "State": addr_raw.get("state"),
             "Postal": addr_raw.get("postal")
         })
-    return pd.DataFrame(records)
+    df = pd.DataFrame(records)
+    # Filter out junk rows (where everything is empty)
+    if not df.empty:
+        df = df[df[["Name","Source","Status","ServiceType"]].notna().any(axis=1)]
+    return df
 
 def erase_all_submissions():
     deleted = 0
@@ -87,12 +89,10 @@ def erase_all_submissions():
         return deleted, log_file
     return deleted, None
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9.14", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9.14 — Strong Erase with Log")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.15", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.15 — Filtered Tickets")
 
 df = fetch_jotform_data()
-if "edit_ticket_id" not in st.session_state:
-    st.session_state.edit_ticket_id = None
 
 tab_all, tab_kpi = st.tabs(["📋 All Tickets", "📊 KPI Dashboard"])
 
