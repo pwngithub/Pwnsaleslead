@@ -54,7 +54,7 @@ with st.form("add_lead_form", clear_on_submit=True):
         st.session_state.leads.append(new_lead)
         save_leads(st.session_state.leads)
         st.success(f"Lead '{lead_name}' added successfully!")
-        st.experimental_rerun()
+        st.rerun()
 
 
 # --- Display Leads and Actions ---
@@ -93,7 +93,7 @@ else:
                     })
                     save_leads(st.session_state.leads)
                     st.success(f"Status for '{lead['name']}' updated.")
-                    st.experimental_rerun()
+                    st.rerun()
         
         # Delete lead button
         with button_col2:
@@ -101,6 +101,6 @@ else:
                 st.session_state.leads.pop(i)
                 save_leads(st.session_state.leads)
                 st.warning(f"Lead '{lead['name']}' deleted.")
-                st.experimental_rerun()
+                st.rerun()
         
         st.markdown("---")
