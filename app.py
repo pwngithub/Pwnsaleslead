@@ -112,6 +112,21 @@ with st.form("new_lead_form", clear_on_submit=True):
         else:
             st.error("Please fill out both Name and Company fields.")
 
+# --- Lead Status Visualization ---
+st.markdown("---")
+st.markdown("### Lead Status Visualization")
+
+# Count the number of leads for each status
+status_counts = st.session_state.leads_df['Status'].value_counts().reset_index()
+status_counts.columns = ['Status', 'Count']
+
+# Display the data in a bar chart
+st.bar_chart(status_counts.set_index('Status'))
+
+# Display a table of the counts
+st.write("Lead Counts by Status:")
+st.dataframe(status_counts, hide_index=True)
+
 # --- Action Buttons ---
 st.markdown("---")
 st.markdown("### Actions")
