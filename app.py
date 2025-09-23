@@ -21,7 +21,9 @@ def fetch_jotform_data():
     subs = data.get("content", [])
     records = []
     for sub in subs:
-        ans = sub.get("answers", {})
+        ans = sub.get("answers") or {}
+        if not isinstance(ans, dict):
+            ans = {}
         addr_raw = ans.get(str(FIELD_ID["address"]), {}).get("answer", {})
         if not isinstance(addr_raw, dict):
             addr_raw = {}
@@ -54,8 +56,8 @@ def add_submission(payload: dict):
     ok = resp.status_code == 200
     return ok, (resp.json() if ok else {"status_code": resp.status_code, "text": resp.text})
 
-st.set_page_config(page_title="Sales Lead Tracker v19.9", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.9 — All Tickets Preview")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.1", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.1 — Safer Answer Handling")
 
 df = fetch_jotform_data()
 if df.empty:
