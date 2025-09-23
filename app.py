@@ -233,8 +233,3 @@ with st.expander("Add a New Lead", expanded=False):
                 st.error("Please fill out both Name and Company fields.")
 
 # --- Action Buttons ---
-st.markdown("---")
-with st.expander("App Actions", expanded=False):
-    if st.button("Reset All Data", help="This will delete all leads and reset to the initial sample data."):
-        st.session_state.leads_df = get_initial_data()
-        st.rerun()
