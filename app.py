@@ -1,106 +1,124 @@
-import streamlit as st
-import json
-import os
-from datetime import datetime, timedelta
 
-# --- Configuration ---
-DATA_FILE = 'leads.json'
-STATUSES = [
-    "Survey Scheduled",
-    "Survey Complete",
-    "Prep Scheduled",
-    "Prep Complete",
-    "Install Scheduled",
-    "Install Completed"
+import streamlit as st
+import pandas as pd
+import requests
+import csv
+import os
+from config import API_KEY, FORM_ID, FIELD_ID
+
+JOTFORM_API = "https://api.jotform.com"
+STATUS_LIST = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer","Lost"]
+SOURCE_LIST = ["Email","Social Media","Phone Call","Walk-in","In Person"]
+SERVICE_TYPES = [
+    "Internet","Phone","TV","Cell Phone",
+    "Internet and Phone","Internet and TV","Internet and Cell Phone"
 ]
 
-# --- Helper Functions for Data Persistence ---
-def load_leads():
-    """Loads leads from the local JSON file."""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r') as f:
-            return json.load(f)
-    return []
+LOG_FILE = "erase_log.csv"
 
-def save_leads(leads):
-    """Saves leads to the local JSON file."""
-    with open(DATA_FILE, 'w') as f:
-        json.dump(leads, f, indent=4)
+def fetch_jotform_data():
+    url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apikey={API_KEY}"
+    r = requests.get(url, timeout=30)
+    r.raise_for_status()
+    subs = r.json().get("content", [])
+    records = []
+    for sub in subs:
+        ans = sub.get("answers") or {}
+        if not isinstance(ans, dict):
+            ans = {}
+        addr_raw = ans.get(str(FIELD_ID["address"]), {}).get("answer", {})
+        if not isinstance(addr_raw, dict):
+            addr_raw = {}
+        name_raw = ans.get(str(FIELD_ID["name"]), {}).get("answer", {})
+        if isinstance(name_raw, dict):
+            first = name_raw.get("first", "").strip()
+            last = name_raw.get("last", "").strip()
+            name_val = f"{first} {last}".strip()
+        elif isinstance(name_raw, str):
+            name_val = name_raw.strip()
+        else:
+            name_val = None
+        display_name = name_val if name_val else f"Unnamed ({sub.get('id')})"
+        if addr_raw.get("city") or addr_raw.get("state"):
+            display_name += f" – {addr_raw.get('city','')}, {addr_raw.get('state','')}"
+        records.append({
+            "SubmissionID": sub.get("id"),
+            "DisplayName": display_name,
+            "Name": name_val,
+            "Source": ans.get(str(FIELD_ID["source"]), {}).get("answer"),
+            "Status": ans.get(str(FIELD_ID["status"]), {}).get("answer"),
+            "ServiceType": ans.get(str(FIELD_ID["service_type"]), {}).get("answer"),
+            "LostReason": ans.get(str(FIELD_ID["lost_reason"]), {}).get("answer"),
+            "Street": addr_raw.get("addr_line1"),
+            "Street2": addr_raw.get("addr_line2"),
+            "City": addr_raw.get("city"),
+            "State": addr_raw.get("state"),
+            "Postal": addr_raw.get("postal")
+        })
+    df = pd.DataFrame(records)
+    if not df.empty:
+        df = df[~df["DisplayName"].str.startswith("Unnamed (")]
+    return df
 
-# --- UI Layout and Logic ---
+def delete_submission(sub_id):
+    del_url = f"{JOTFORM_API}/submission/{sub_id}?apiKey={API_KEY}"
+    d = requests.delete(del_url, timeout=30)
+    status, text = d.status_code, d.text
+    # Log the attempt
+    write_header = not os.path.exists(LOG_FILE)
+    with open(LOG_FILE, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["id","status","text"])
+        if write_header:
+            writer.writeheader()
+        writer.writerow({"id": sub_id, "status": status, "text": text})
+    return status == 200, text
 
-st.set_page_config(layout="centered", page_title="ISP Lead Tracker")
-st.title("ISP Lead Tracker")
-st.markdown("Track the status and time for each lead.")
+st.set_page_config(page_title="Sales Lead Tracker v19.9.17", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.9.17 — Delete Selected Ticket")
 
-# Initialize session state for the leads
-if 'leads' not in st.session_state:
-    st.session_state.leads = load_leads()
+df = fetch_jotform_data()
 
-# --- Add New Lead Form ---
-st.header("Add New Lead")
-with st.form("add_lead_form", clear_on_submit=True):
-    lead_name = st.text_input("Enter Lead Name")
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        submitted = st.form_submit_button("Add Lead")
+tab_all, tab_kpi = st.tabs(["📋 All Tickets", "📊 KPI Dashboard"])
 
-    if submitted and lead_name:
-        new_lead = {
-            "name": lead_name,
-            "status": STATUSES[0],
-            "statusHistory": [{"status": STATUSES[0], "timestamp": datetime.now().isoformat()}],
-        }
-        st.session_state.leads.append(new_lead)
-        save_leads(st.session_state.leads)
-        st.success(f"Lead '{lead_name}' added successfully!")
-        st.rerun()
-
-
-# --- Display Leads and Actions ---
-st.header("Current Leads")
-
-if not st.session_state.leads:
-    st.info("No leads yet. Add one above!")
-else:
-    for i, lead in enumerate(st.session_state.leads):
-        st.subheader(lead['name'])
-        
-        # Calculate time in status and total time
-        current_status_start = datetime.fromisoformat(lead['statusHistory'][-1]['timestamp'])
-        time_in_status = datetime.now() - current_status_start
-        
-        total_time = datetime.now() - datetime.fromisoformat(lead['statusHistory'][0]['timestamp'])
-
-        # Display details
-        st.write(f"**Current Status:** {lead['status']}")
-        st.write(f"**Time in Status:** {time_in_status}")
-        st.write(f"**Total Time:** {total_time}")
-        
-        # Action buttons
-        current_index = STATUSES.index(lead['status'])
-        
-        button_col1, button_col2, button_col3 = st.columns([1, 1, 1])
-
-        # Move to next status button
-        with button_col1:
-            if current_index < len(STATUSES) - 1:
-                if st.button(f"Move to {STATUSES[current_index + 1]}", key=f"move_{i}"):
-                    lead['status'] = STATUSES[current_index + 1]
-                    lead['statusHistory'].append({
-                        "status": STATUSES[current_index + 1],
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    save_leads(st.session_state.leads)
-                    st.success(f"Status for '{lead['name']}' updated.")
-                    st.rerun()
-        
-        # Delete lead button
-        with button_col2:
-            if st.button("Delete", key=f"delete_{i}"):
-                st.session_state.leads.pop(i)
-                save_leads(st.session_state.leads)
-                st.warning(f"Lead '{lead['name']}' deleted.")
+with tab_all:
+    st.subheader("All Tickets Preview")
+    if df.empty:
+        st.info("No tickets available.")
+    else:
+        for idx, row in df.iterrows():
+            cols = st.columns([3,2,2,2,2,2,2,1,1])
+            cols[0].write(row["DisplayName"])
+            cols[1].write(row["Source"])
+            cols[2].write(row["Status"])
+            cols[3].write(row["ServiceType"])
+            cols[4].write(row["City"])
+            cols[5].write(row["State"])
+            cols[6].write(row["LostReason"])
+            sid = row["SubmissionID"]
+            if cols[7].button("✏️ Edit", key=f"editbtn_{idx}_{sid}"):
+                st.session_state.edit_ticket_id = sid
                 st.rerun()
-        
-        st.markdown("---")
+            # Delete button with confirmation
+            with cols[8]:
+                if st.button("🗑 Delete", key=f"delbtn_{idx}_{sid}"):
+                    confirm_key = f"confirmdel_{sid}"
+                    st.session_state[confirm_key] = True
+            confirm_key = f"confirmdel_{sid}"
+            if st.session_state.get(confirm_key, False):
+                st.warning("⚠️ Confirm deletion of this ticket")
+                if st.checkbox("Yes, delete this ticket permanently", key=f"chk_{sid}"):
+                    ok, msg = delete_submission(sid)
+                    if ok:
+                        st.success(f"✅ Ticket {sid} deleted.")
+                        del st.session_state[confirm_key]
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Failed to delete {sid}: {msg}")
+
+with tab_kpi:
+    st.subheader("📊 KPI Dashboard")
+    if not df.empty:
+        st.markdown("### Tickets by Service Type")
+        st.bar_chart(df["ServiceType"].value_counts())
+        st.markdown("### Tickets by State")
+        st.bar_chart(df["State"].value_counts())
