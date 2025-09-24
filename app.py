@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import requests
@@ -68,7 +69,6 @@ def fetch_jotform_data():
             "ts_waiting": get_ts(FIELD_ID["waiting_on_customer"]),
         })
     df = pd.DataFrame(records)
-    # drop unnamed ghosts
     if not df.empty:
         df = df[~df["Name"].str.startswith("Unnamed (")]
     return df
@@ -98,14 +98,12 @@ def add_submission(payload: dict):
     return resp.status_code == 200, resp.text
 
 def replace_submission(sub_id, payload: dict):
-    # Delete and recreate (JotForm API doesn't support partial update reliably)
     del_url = f"{JOTFORM_API}/submission/{sub_id}?apiKey={API_KEY}"
     requests.delete(del_url, timeout=30)
     return add_submission(payload)
 
 def build_status_timestamp(status: str) -> dict:
     now = datetime.now().isoformat()
-    # Only set the timestamp for the moved-to status
     stamps = {}
     fid = STATUS_TO_FIELD.get(status)
     if fid:
@@ -119,11 +117,9 @@ settings = load_settings()
 blocked_words = settings.get("blocked_words", DEFAULT_BLOCKED)
 reminder_days = int(settings.get("reminder_days", 3))
 
-# Refresh button
 if st.button("🔄 Refresh Tickets"):
     st.session_state["refresh"] = True
 
-# Fetch & filter
 df = fetch_jotform_data()
 df, hidden_count = apply_blocklist(df, blocked_words)
 
@@ -161,7 +157,6 @@ with tab_pipeline:
                         st.write(f"Service: {row['ServiceType']}")
                         new_status = st.selectbox("Move to", STATUS_LIST, index=STATUS_LIST.index(status), key=f"mv_{row['SubmissionID']}")
                         if st.button("Move", key=f"btn_{row['SubmissionID']}"):
-                            # Recreate submission with updated status + timestamp
                             payload = {
                                 FIELD_ID["name"]: row["Name"],
                                 FIELD_ID["source"]: row["Source"],
@@ -182,13 +177,11 @@ with tab_reminders:
     if df.empty:
         st.info("No tickets available.")
     else:
-        # Determine last updated timestamp per row
         def last_ts(row):
             ts_fields = ["ts_survey_scheduled","ts_survey_completed","ts_scheduled","ts_installed","ts_waiting"]
             vals = [row[f] for f in ts_fields if pd.notna(row[f])]
             if not vals:
                 return None
-            # Parse ISO strings
             try:
                 parsed = [pd.to_datetime(v, errors="coerce") for v in vals]
                 parsed = [p for p in parsed if pd.notna(p)]
@@ -227,11 +220,9 @@ with tab_kpi:
 
 with tab_settings:
     st.subheader("⚙️ Settings")
-    # Blocklist
     st.markdown("**Blocked Words** (hide tickets whose names include any of these)")
     current_bw = ", ".join(blocked_words)
     new_bw = st.text_input("Comma-separated list", value=current_bw, key="bw_input")
-    # Reminder threshold
     st.markdown("**Reminder Threshold (days)**")
     new_rd = st.number_input("Days of inactivity before reminder", min_value=1, max_value=60, value=int(reminder_days), step=1, key="rd_input")
 
