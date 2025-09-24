@@ -90,6 +90,9 @@ def add_submission(payload: dict):
             parts = val.split(" ", 1)
             form[f"submission[{qid}][first]"] = parts[0]
             form[f"submission[{qid}][last]"] = parts[1] if len(parts) > 1 else ""
+        elif qid == FIELD_ID["address"] and isinstance(val, dict):
+            for k,v in val.items():
+                form[f"submission[{qid}][{k}]"] = v
         else:
             if val is not None:
                 form[f"submission[{qid}]"] = val
@@ -110,8 +113,8 @@ def build_status_timestamp(status: str) -> dict:
         stamps[fid] = now
     return stamps
 
-st.set_page_config(page_title="Sales Lead Tracker v19.10.1", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.10.1 — Pipeline & Reminders (bugfix)")
+st.set_page_config(page_title="Sales Lead Tracker v19.10.2", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.10.2 — Add Ticket + Quick Add")
 
 settings = load_settings()
 blocked_words = settings.get("blocked_words", DEFAULT_BLOCKED)
@@ -127,9 +130,49 @@ st.caption(f"Last synced from JotForm: {datetime.now().strftime('%Y-%m-%d %H:%M:
 if hidden_count > 0:
     st.info(f"ℹ️ {hidden_count} tickets hidden (blocked words: {', '.join(blocked_words)})")
 
-tab_all, tab_pipeline, tab_reminders, tab_kpi, tab_settings = st.tabs(
-    ["📋 All Tickets", "🗂 Pipeline", "⏰ Reminders", "📊 KPI Dashboard", "⚙️ Settings"]
+tab_add, tab_all, tab_pipeline, tab_reminders, tab_kpi, tab_settings = st.tabs(
+    ["➕ Add Ticket", "📋 All Tickets", "🗂 Pipeline", "⏰ Reminders", "📊 KPI Dashboard", "⚙️ Settings"]
 )
+
+with tab_add:
+    st.subheader("➕ Add New Ticket")
+    with st.form("add_ticket_form"):
+        first = st.text_input("First Name")
+        last = st.text_input("Last Name")
+        source = st.selectbox("Contact Source", ["Email","Phone","Walk-In","Social Media","In Person"])
+        status = st.selectbox("Status", STATUS_LIST, index=0)
+        service = st.selectbox("Service Type", ["Internet","Phone","TV","Cell Phone","Internet and Phone","Internet and TV","Internet and Cell Phone"])
+        lost_reason = st.text_input("Lost Reason (optional)")
+        st.markdown("**Address**")
+        addr1 = st.text_input("Street Address")
+        addr2 = st.text_input("Street Address Line 2")
+        city = st.text_input("City")
+        state = st.text_input("State / Province")
+        postal = st.text_input("Postal / Zip Code")
+        submitted = st.form_submit_button("Add Ticket")
+        if submitted:
+            fullname = f"{first} {last}".strip()
+            payload = {
+                FIELD_ID["name"]: fullname,
+                FIELD_ID["source"]: source,
+                FIELD_ID["status"]: status,
+                FIELD_ID["service_type"]: service,
+                FIELD_ID["lost_reason"]: lost_reason,
+                FIELD_ID["address"]: {
+                    "addr_line1": addr1,
+                    "addr_line2": addr2,
+                    "city": city,
+                    "state": state,
+                    "postal": postal
+                }
+            }
+            payload.update(build_status_timestamp(status))
+            ok, msg = add_submission(payload)
+            if ok:
+                st.success("✅ Ticket added successfully!")
+                st.rerun()
+            else:
+                st.error(f"❌ Failed to add ticket: {msg}")
 
 with tab_all:
     st.subheader("All Tickets")
@@ -139,7 +182,26 @@ with tab_all:
         st.dataframe(df[["Name","Source","Status","ServiceType","LostReason"]])
 
 with tab_pipeline:
-    st.subheader("🗂 Pipeline (drag/drop-style)")
+    st.subheader("🗂 Pipeline (drag/drop-style + Quick Add)")
+    # Quick Add mini form
+    with st.form("quick_add_form"):
+        qname = st.text_input("Lead Name")
+        qsource = st.selectbox("Source", ["Email","Phone","Walk-In","Social Media","In Person"], key="qsrc")
+        qstatus = st.selectbox("Status", STATUS_LIST, index=0, key="qstat")
+        qsubmit = st.form_submit_button("Quick Add")
+        if qsubmit:
+            payload = {
+                FIELD_ID["name"]: qname,
+                FIELD_ID["source"]: qsource,
+                FIELD_ID["status"]: qstatus,
+            }
+            payload.update(build_status_timestamp(qstatus))
+            ok, msg = add_submission(payload)
+            if ok:
+                st.success("✅ Quick Ticket added!")
+                st.rerun()
+            else:
+                st.error(f"❌ Failed to add quick ticket: {msg}")
     if df.empty:
         st.info("No tickets available.")
     else:
@@ -221,7 +283,7 @@ with tab_kpi:
 
 with tab_settings:
     st.subheader("⚙️ Settings")
-    st.markdown("**Blocked Words** (hide tickets whose names include any of these)")
+    st.markdown("**Blocked Words**")
     current_bw = ", ".join(blocked_words)
     new_bw = st.text_input("Comma-separated list", value=current_bw, key="bw_input")
     st.markdown("**Reminder Threshold (days)**")
