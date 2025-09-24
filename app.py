@@ -67,6 +67,7 @@ def fetch_jotform_data():
             "ts_scheduled": get_ts(FIELD_ID["scheduled"]),
             "ts_installed": get_ts(FIELD_ID["installed"]),
             "ts_waiting": get_ts(FIELD_ID["waiting_on_customer"]),
+            "RawAnswers": ans
         })
     df = pd.DataFrame(records)
     if not df.empty:
@@ -83,45 +84,23 @@ def apply_blocklist(df, blocked_words):
     df = df[~mask]
     return df, hidden_count
 
-def add_submission(payload: dict):
-    form = {}
-    for qid, val in payload.items():
-        if qid == FIELD_ID["name"] and isinstance(val, str):
-            parts = val.split(" ", 1)
-            form[f"submission[{qid}][first]"] = parts[0]
-            form[f"submission[{qid}][last]"] = parts[1] if len(parts) > 1 else ""
-        elif qid == FIELD_ID["address"] and isinstance(val, dict):
-            for k,v in val.items():
-                form[f"submission[{qid}][{k}]"] = v
-        else:
-            if val is not None:
-                form[f"submission[{qid}]"] = val
-    url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apiKey={API_KEY}"
-    resp = requests.post(url, data=form, timeout=30)
+def update_submission(sub_id, payload: dict):
+    # Partial update to JotForm
+    url = f"{JOTFORM_API}/submission/{sub_id}?apiKey={API_KEY}"
+    resp = requests.post(url, data=payload, timeout=30)
     return resp.status_code == 200, resp.text
 
-def replace_submission(sub_id, payload: dict):
-    del_url = f"{JOTFORM_API}/submission/{sub_id}?apiKey={API_KEY}"
-    requests.delete(del_url, timeout=30)
-    return add_submission(payload)
+def delete_submission(sub_id):
+    url = f"{JOTFORM_API}/submission/{sub_id}?apiKey={API_KEY}"
+    resp = requests.delete(url, timeout=30)
+    return resp.status_code == 200, resp.text
 
-def build_status_timestamp(status: str) -> dict:
-    now = datetime.now().isoformat()
-    stamps = {}
-    fid = STATUS_TO_FIELD.get(status)
-    if fid:
-        stamps[fid] = now
-    return stamps
-
-st.set_page_config(page_title="Sales Lead Tracker v19.10.2", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.10.2 — Add Ticket + Quick Add")
+st.set_page_config(page_title="Sales Lead Tracker v19.10.3", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.10.3 — Full CRUD")
 
 settings = load_settings()
 blocked_words = settings.get("blocked_words", DEFAULT_BLOCKED)
 reminder_days = int(settings.get("reminder_days", 3))
-
-if st.button("🔄 Refresh Tickets"):
-    st.session_state["refresh"] = True
 
 df = fetch_jotform_data()
 df, hidden_count = apply_blocklist(df, blocked_words)
@@ -130,176 +109,66 @@ st.caption(f"Last synced from JotForm: {datetime.now().strftime('%Y-%m-%d %H:%M:
 if hidden_count > 0:
     st.info(f"ℹ️ {hidden_count} tickets hidden (blocked words: {', '.join(blocked_words)})")
 
-tab_add, tab_all, tab_pipeline, tab_reminders, tab_kpi, tab_settings = st.tabs(
-    ["➕ Add Ticket", "📋 All Tickets", "🗂 Pipeline", "⏰ Reminders", "📊 KPI Dashboard", "⚙️ Settings"]
-)
+# Tabs
+tab_all, tab_edit = st.tabs(["📋 All Tickets", "📝 Edit Ticket"])
 
-with tab_add:
-    st.subheader("➕ Add New Ticket")
-    with st.form("add_ticket_form"):
-        first = st.text_input("First Name")
-        last = st.text_input("Last Name")
-        source = st.selectbox("Contact Source", ["Email","Phone","Walk-In","Social Media","In Person"])
-        status = st.selectbox("Status", STATUS_LIST, index=0)
-        service = st.selectbox("Service Type", ["Internet","Phone","TV","Cell Phone","Internet and Phone","Internet and TV","Internet and Cell Phone"])
-        lost_reason = st.text_input("Lost Reason (optional)")
-        st.markdown("**Address**")
-        addr1 = st.text_input("Street Address")
-        addr2 = st.text_input("Street Address Line 2")
-        city = st.text_input("City")
-        state = st.text_input("State / Province")
-        postal = st.text_input("Postal / Zip Code")
-        submitted = st.form_submit_button("Add Ticket")
-        if submitted:
-            fullname = f"{first} {last}".strip()
-            payload = {
-                FIELD_ID["name"]: fullname,
-                FIELD_ID["source"]: source,
-                FIELD_ID["status"]: status,
-                FIELD_ID["service_type"]: service,
-                FIELD_ID["lost_reason"]: lost_reason,
-                FIELD_ID["address"]: {
-                    "addr_line1": addr1,
-                    "addr_line2": addr2,
-                    "city": city,
-                    "state": state,
-                    "postal": postal
-                }
-            }
-            payload.update(build_status_timestamp(status))
-            ok, msg = add_submission(payload)
-            if ok:
-                st.success("✅ Ticket added successfully!")
-                st.rerun()
-            else:
-                st.error(f"❌ Failed to add ticket: {msg}")
+if "edit_ticket" not in st.session_state:
+    st.session_state["edit_ticket"] = None
 
 with tab_all:
     st.subheader("All Tickets")
     if df.empty:
         st.info("No tickets available.")
     else:
-        st.dataframe(df[["Name","Source","Status","ServiceType","LostReason"]])
+        for _, row in df.iterrows():
+            cols = st.columns([4,1])
+            cols[0].write(f"**{row['Name']}** | {row['Source']} | {row['Status']} | {row['ServiceType']}")
+            if cols[1].button("✏️ Edit", key=f"edit_{row['SubmissionID']}"):
+                st.session_state["edit_ticket"] = row["SubmissionID"]
+                st.experimental_rerun()
 
-with tab_pipeline:
-    st.subheader("🗂 Pipeline (drag/drop-style + Quick Add)")
-    # Quick Add mini form
-    with st.form("quick_add_form"):
-        qname = st.text_input("Lead Name")
-        qsource = st.selectbox("Source", ["Email","Phone","Walk-In","Social Media","In Person"], key="qsrc")
-        qstatus = st.selectbox("Status", STATUS_LIST, index=0, key="qstat")
-        qsubmit = st.form_submit_button("Quick Add")
-        if qsubmit:
-            payload = {
-                FIELD_ID["name"]: qname,
-                FIELD_ID["source"]: qsource,
-                FIELD_ID["status"]: qstatus,
-            }
-            payload.update(build_status_timestamp(qstatus))
-            ok, msg = add_submission(payload)
+with tab_edit:
+    st.subheader("📝 Edit Ticket")
+    if not st.session_state["edit_ticket"]:
+        st.info("Select a ticket from All Tickets to edit.")
+    else:
+        sub_id = st.session_state["edit_ticket"]
+        ticket = df[df["SubmissionID"] == sub_id].iloc[0]
+        with st.form("edit_ticket_form"):
+            name = st.text_input("Name", value=ticket["Name"] or "")
+            source = st.text_input("Source", value=ticket["Source"] or "")
+            status = st.selectbox("Status", STATUS_LIST, index=STATUS_LIST.index(ticket["Status"]) if ticket["Status"] in STATUS_LIST else 0)
+            service = st.text_input("Service Type", value=ticket["ServiceType"] or "")
+            lost = st.text_input("Lost Reason", value=ticket["LostReason"] or "")
+            submitted = st.form_submit_button("💾 Save Changes")
+            if submitted:
+                payload = {}
+                if name != ticket["Name"]:
+                    parts = name.split(" ",1)
+                    payload[f"submission[{FIELD_ID['name']}][first]"] = parts[0]
+                    payload[f"submission[{FIELD_ID['name']}][last]"] = parts[1] if len(parts)>1 else ""
+                if source != ticket["Source"]:
+                    payload[f"submission[{FIELD_ID['source']}]"] = source
+                if status != ticket["Status"]:
+                    payload[f"submission[{FIELD_ID['status']}]"] = status
+                    payload[f"submission[{STATUS_TO_FIELD[status]}]"] = datetime.now().isoformat()
+                if service != ticket["ServiceType"]:
+                    payload[f"submission[{FIELD_ID['service_type']}]"] = service
+                if lost != ticket["LostReason"]:
+                    payload[f"submission[{FIELD_ID['lost_reason']}]"] = lost
+                if payload:
+                    ok,msg = update_submission(sub_id,payload)
+                    if ok:
+                        st.success("✅ Ticket updated")
+                        st.session_state["edit_ticket"]=None
+                        st.experimental_rerun()
+                    else:
+                        st.error(f"❌ Failed: {msg}")
+        if st.button("🗑 Delete Ticket", type="primary"):
+            ok,msg = delete_submission(sub_id)
             if ok:
-                st.success("✅ Quick Ticket added!")
-                st.rerun()
+                st.success("✅ Ticket deleted")
+                st.session_state["edit_ticket"]=None
+                st.experimental_rerun()
             else:
-                st.error(f"❌ Failed to add quick ticket: {msg}")
-    if df.empty:
-        st.info("No tickets available.")
-    else:
-        cols = st.columns(5)
-        status_cols = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer"]
-        for i, status in enumerate(status_cols):
-            with cols[i]:
-                st.markdown(f"**{status}**")
-                col_df = df[df["Status"] == status]
-                if col_df.empty:
-                    st.caption("—")
-                for _, row in col_df.iterrows():
-                    with st.expander(row["Name"], expanded=False):
-                        st.write(f"Source: {row['Source']}")
-                        st.write(f"Service: {row['ServiceType']}")
-                        new_status = st.selectbox("Move to", STATUS_LIST, index=STATUS_LIST.index(status), key=f"mv_{row['SubmissionID']}")
-                        if st.button("Move", key=f"btn_{row['SubmissionID']}"):
-                            payload = {
-                                FIELD_ID["name"]: row["Name"],
-                                FIELD_ID["source"]: row["Source"],
-                                FIELD_ID["status"]: new_status,
-                                FIELD_ID["service_type"]: row["ServiceType"],
-                                FIELD_ID["lost_reason"]: row["LostReason"],
-                            }
-                            payload.update(build_status_timestamp(new_status))
-                            ok, msg = replace_submission(row["SubmissionID"], payload)
-                            if ok:
-                                st.success("Moved ✔")
-                                st.rerun()
-                            else:
-                                st.error(f"Failed to move: {msg}")
-
-with tab_reminders:
-    st.subheader("⏰ Follow-up Reminders")
-    if df.empty:
-        st.info("No tickets available.")
-    else:
-        def last_ts(row):
-            ts_fields = ["ts_survey_scheduled","ts_survey_completed","ts_scheduled","ts_installed","ts_waiting"]
-            vals = [row[f] for f in ts_fields if pd.notna(row[f])]
-            if not vals:
-                return None
-            try:
-                parsed = [pd.to_datetime(v, errors="coerce") for v in vals]
-                parsed = [p for p in parsed if pd.notna(p)]
-                if not parsed:
-                    return None
-                return max(parsed)
-            except Exception:
-                return None
-
-        df["LastUpdated"] = df.apply(last_ts, axis=1)
-        df["LastUpdated"] = pd.to_datetime(df["LastUpdated"], errors="coerce")
-        now = pd.Timestamp.now()
-        df["DaysSince"] = (now - df["LastUpdated"]).dt.days
-        df_rem = df[(df["LastUpdated"].notna()) & (df["DaysSince"] >= reminder_days)]
-        if df_rem.empty:
-            st.success(f"👏 All good. No leads inactive ≥ {reminder_days} days.")
-        else:
-            st.warning(f"⚠️ {len(df_rem)} leads inactive ≥ {reminder_days} days")
-            st.dataframe(df_rem[["Name","Status","DaysSince","Source","ServiceType"]])
-
-with tab_kpi:
-    st.subheader("📊 KPIs")
-    if df.empty:
-        st.info("No tickets available.")
-    else:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**Leads by Source**")
-            st.bar_chart(df["Source"].value_counts())
-        with c2:
-            st.markdown("**Lost Leads by Reason**")
-            lost = df[df["Status"] == "Lost"]
-            if lost.empty:
-                st.caption("No lost leads")
-            else:
-                st.bar_chart(lost["LostReason"].fillna("Unspecified").value_counts())
-
-with tab_settings:
-    st.subheader("⚙️ Settings")
-    st.markdown("**Blocked Words**")
-    current_bw = ", ".join(blocked_words)
-    new_bw = st.text_input("Comma-separated list", value=current_bw, key="bw_input")
-    st.markdown("**Reminder Threshold (days)**")
-    new_rd = st.number_input("Days of inactivity before reminder", min_value=1, max_value=60, value=int(reminder_days), step=1, key="rd_input")
-
-    csave, creset = st.columns(2)
-    with csave:
-        if st.button("💾 Save Settings"):
-            new_list = [w.strip() for w in new_bw.split(",") if w.strip()]
-            new_settings = {"blocked_words": new_list, "reminder_days": int(new_rd)}
-            save_settings(new_settings)
-            st.success("Settings saved.")
-            st.rerun()
-    with creset:
-        if st.button("♻️ Reset to Defaults"):
-            if os.path.exists(SETTINGS_FILE):
-                os.remove(SETTINGS_FILE)
-            st.success("Settings reset to defaults.")
-            st.rerun()
+                st.error(f"❌ Failed to delete: {msg}")
