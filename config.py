@@ -5,6 +5,7 @@ FIELD_ID = {
     "name": 3,
     "source": 4,
     "status": 6,
+    "notes": 10,
     "survey_scheduled": 12,
     "survey_completed": 13,
     "scheduled": 14,

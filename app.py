@@ -52,9 +52,11 @@ def fetch_jotform_data():
         else:
             name_val = None
 
-        def get_ts(fid):
-            val = ans.get(str(fid), {}).get("answer")
-            return val if isinstance(val, str) else None
+        notes_val = ans.get(str(FIELD_ID["notes"]), {}).get("answer")
+        if isinstance(notes_val, dict):
+            notes_val = notes_val.get("text") if "text" in notes_val else str(notes_val)
+        if isinstance(notes_val, list):
+            notes_val = " ".join(str(x) for x in notes_val)
 
         records.append({
             "SubmissionID": sub.get("id"),
@@ -63,11 +65,7 @@ def fetch_jotform_data():
             "Status": ans.get(str(FIELD_ID["status"]), {}).get("answer"),
             "ServiceType": ans.get(str(FIELD_ID["service_type"]), {}).get("answer"),
             "LostReason": ans.get(str(FIELD_ID["lost_reason"]), {}).get("answer"),
-            "ts_survey_scheduled": get_ts(FIELD_ID["survey_scheduled"]),
-            "ts_survey_completed": get_ts(FIELD_ID["survey_completed"]),
-            "ts_scheduled": get_ts(FIELD_ID["scheduled"]),
-            "ts_installed": get_ts(FIELD_ID["installed"]),
-            "ts_waiting": get_ts(FIELD_ID["waiting_on_customer"]),
+            "Notes": notes_val,
             "RawAnswers": ans
         })
     df = pd.DataFrame(records)
@@ -100,14 +98,15 @@ def add_submission(payload: dict):
     resp = requests.post(url, data=payload, timeout=30)
     return resp.status_code == 200, resp.text
 
-st.set_page_config(page_title="Sales Lead Tracker v19.10.5", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.10.5 — Full CRUD + Analytics")
+st.set_page_config(page_title="Sales Lead Tracker v19.10.6", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.10.6 — Full CRUD + Notes + Address")
 
 settings = load_settings()
 blocked_words = settings.get("blocked_words", DEFAULT_BLOCKED)
 reminder_days = int(settings.get("reminder_days", 3))
 
 df = fetch_jotform_data()
+st.session_state["all_data"] = df.copy()
 df, hidden_count = apply_blocklist(df, blocked_words)
 
 st.caption(f"Last synced from JotForm: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -115,9 +114,7 @@ if hidden_count > 0:
     st.info(f"ℹ️ {hidden_count} tickets hidden (blocked words: {', '.join(blocked_words)})")
 
 # Tabs
-tab_all, tab_edit, tab_add, tab_pipeline, tab_reminders, tab_kpi, tab_settings = st.tabs(
-    ["📋 All Tickets", "📝 Edit Ticket", "➕ Add Ticket", "🗂 Pipeline", "⏰ Reminders", "📊 KPI Dashboard", "⚙️ Settings"]
-)
+tab_all, tab_edit, tab_add = st.tabs(["📋 All Tickets", "📝 Edit Ticket", "➕ Add Ticket"])
 
 if "edit_ticket" not in st.session_state:
     st.session_state["edit_ticket"] = None
@@ -136,8 +133,8 @@ with tab_all:
             )
             df = df[mask]
         for _, row in df.iterrows():
-            cols = st.columns([4,1])
-            cols[0].write(f"**{row['Name']}** | {row['Source']} | {row['Status']} | {row['ServiceType']}")
+            cols = st.columns([5,1])
+            cols[0].write(f"**{row['Name']}** | {row['Source']} | {row['Status']} | {row['ServiceType']} | {row['Notes']}")
             if cols[1].button("✏️ Edit", key=f"edit_{row['SubmissionID']}"):
                 st.session_state["edit_ticket"] = row["SubmissionID"]
                 st.rerun()
@@ -148,13 +145,14 @@ with tab_edit:
         st.info("Select a ticket from All Tickets to edit.")
     else:
         sub_id = st.session_state["edit_ticket"]
-        ticket = df[df["SubmissionID"] == sub_id].iloc[0]
+        ticket = st.session_state["all_data"][st.session_state["all_data"]["SubmissionID"] == sub_id].iloc[0]
         with st.form("edit_ticket_form"):
             name = st.text_input("Name", value=ticket["Name"] or "")
             source = st.text_input("Source", value=ticket["Source"] or "")
             status = st.selectbox("Status", STATUS_LIST, index=STATUS_LIST.index(ticket["Status"]) if ticket["Status"] in STATUS_LIST else 0)
             service = st.text_input("Service Type", value=ticket["ServiceType"] or "")
             lost = st.text_input("Lost Reason", value=ticket["LostReason"] or "")
+            notes = st.text_area("Notes", value=ticket["Notes"] or "")
             submitted = st.form_submit_button("💾 Save Changes")
             if submitted:
                 payload = {}
@@ -171,6 +169,8 @@ with tab_edit:
                     payload[f"submission[{FIELD_ID['service_type']}]"] = service
                 if lost != ticket["LostReason"]:
                     payload[f"submission[{FIELD_ID['lost_reason']}]"] = lost
+                if notes != ticket["Notes"]:
+                    payload[f"submission[{FIELD_ID['notes']}]"] = notes
                 if payload:
                     ok,msg = update_submission(sub_id,payload)
                     if ok:
@@ -187,3 +187,43 @@ with tab_edit:
                 st.rerun()
             else:
                 st.error(f"❌ Failed to delete: {msg}")
+
+with tab_add:
+    st.subheader("➕ Add Ticket")
+    with st.form("add_ticket_form"):
+        first = st.text_input("First Name")
+        last = st.text_input("Last Name")
+        source = st.selectbox("Source", ["Email","Phone","Walk In","Social Media","In Person"])
+        status = st.selectbox("Status", STATUS_LIST, index=0)
+        service = st.selectbox("Service Type", ["Internet","Phone","TV","Internet and Phone","Internet and TV","Internet and Cell Phone"])
+        lost = st.text_input("Lost Reason")
+        notes = st.text_area("Notes")
+        street1 = st.text_input("Street 1")
+        street2 = st.text_input("Street 2")
+        city = st.text_input("City")
+        state = st.text_input("State")
+        postal = st.text_input("Postal Code")
+        submitted = st.form_submit_button("➕ Add")
+        if submitted:
+            payload = {
+                f"submission[{FIELD_ID['name']}][first]": first,
+                f"submission[{FIELD_ID['name']}][last]": last,
+                f"submission[{FIELD_ID['source']}]": source,
+                f"submission[{FIELD_ID['status']}]": status,
+                f"submission[{FIELD_ID['service_type']}]": service,
+                f"submission[{FIELD_ID['lost_reason']}]": lost,
+                f"submission[{FIELD_ID['notes']}]": notes,
+                f"submission[{FIELD_ID['address']}][addr_line1]": street1,
+                f"submission[{FIELD_ID['address']}][addr_line2]": street2,
+                f"submission[{FIELD_ID['address']}][city]": city,
+                f"submission[{FIELD_ID['address']}][state]": state,
+                f"submission[{FIELD_ID['address']}][postal]": postal
+            }
+            if status in STATUS_TO_FIELD:
+                payload[f"submission[{STATUS_TO_FIELD[status]}]"] = datetime.now().isoformat()
+            ok,msg = add_submission(payload)
+            if ok:
+                st.success("✅ Ticket added")
+                st.rerun()
+            else:
+                st.error(f"❌ Failed: {msg}")
