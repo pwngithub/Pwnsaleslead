@@ -110,8 +110,8 @@ def build_status_timestamp(status: str) -> dict:
         stamps[fid] = now
     return stamps
 
-st.set_page_config(page_title="Sales Lead Tracker v19.10.0", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.10.0 — Pipeline & Reminders")
+st.set_page_config(page_title="Sales Lead Tracker v19.10.1", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.10.1 — Pipeline & Reminders (bugfix)")
 
 settings = load_settings()
 blocked_words = settings.get("blocked_words", DEFAULT_BLOCKED)
@@ -192,6 +192,7 @@ with tab_reminders:
                 return None
 
         df["LastUpdated"] = df.apply(last_ts, axis=1)
+        df["LastUpdated"] = pd.to_datetime(df["LastUpdated"], errors="coerce")
         now = pd.Timestamp.now()
         df["DaysSince"] = (now - df["LastUpdated"]).dt.days
         df_rem = df[(df["LastUpdated"].notna()) & (df["DaysSince"] >= reminder_days)]
