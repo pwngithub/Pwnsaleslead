@@ -5,6 +5,7 @@ import requests
 import os, json
 from datetime import datetime
 import plotly.express as px
+from io import BytesIO
 from config import API_KEY, FORM_ID, FIELD_ID, BLOCKED_WORDS as DEFAULT_BLOCKED
 
 JOTFORM_API = "https://api.jotform.com"
@@ -83,23 +84,8 @@ def apply_blocklist(df, blocked_words):
     df = df[~mask]
     return df, hidden_count
 
-def update_submission(sub_id, payload: dict):
-    url = f"{JOTFORM_API}/submission/{sub_id}?apiKey={API_KEY}"
-    resp = requests.post(url, data=payload, timeout=30)
-    return resp.status_code == 200, resp.text
-
-def delete_submission(sub_id):
-    url = f"{JOTFORM_API}/submission/{sub_id}?apiKey={API_KEY}"
-    resp = requests.delete(url, timeout=30)
-    return resp.status_code == 200, resp.text
-
-def add_submission(payload: dict):
-    url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apiKey={API_KEY}"
-    resp = requests.post(url, data=payload, timeout=30)
-    return resp.status_code == 200, resp.text
-
-st.set_page_config(page_title="Sales Lead Tracker v19.10.6", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.10.6 — Full CRUD + Notes + Address")
+st.set_page_config(page_title="Sales Lead Tracker v19.10.7", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.10.7")
 
 settings = load_settings()
 blocked_words = settings.get("blocked_words", DEFAULT_BLOCKED)
@@ -109,121 +95,47 @@ df = fetch_jotform_data()
 st.session_state["all_data"] = df.copy()
 df, hidden_count = apply_blocklist(df, blocked_words)
 
-st.caption(f"Last synced from JotForm: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-if hidden_count > 0:
-    st.info(f"ℹ️ {hidden_count} tickets hidden (blocked words: {', '.join(blocked_words)})")
-
-# Tabs
-tab_all, tab_edit, tab_add = st.tabs(["📋 All Tickets", "📝 Edit Ticket", "➕ Add Ticket"])
-
-if "edit_ticket" not in st.session_state:
-    st.session_state["edit_ticket"] = None
+tab_all, tab_edit, tab_add, tab_kpi, tab_settings = st.tabs(
+    ["📋 All Tickets", "📝 Edit Ticket", "➕ Add Ticket", "📊 KPI Dashboard", "⚙️ Settings"]
+)
 
 with tab_all:
     st.subheader("All Tickets")
     search = st.text_input("🔍 Search tickets")
+    if not df.empty and search:
+        mask = (
+            df["Name"].astype(str).str.contains(search, case=False, na=False) |
+            df["Source"].astype(str).str.contains(search, case=False, na=False) |
+            df["Status"].astype(str).str.contains(search, case=False, na=False)
+        )
+        df = df[mask]
     if df.empty:
         st.info("No tickets available.")
     else:
-        if search:
-            mask = (
-                df["Name"].astype(str).str.contains(search, case=False, na=False) |
-                df["Source"].astype(str).str.contains(search, case=False, na=False) |
-                df["Status"].astype(str).str.contains(search, case=False, na=False)
-            )
-            df = df[mask]
-        for _, row in df.iterrows():
-            cols = st.columns([5,1])
-            cols[0].write(f"**{row['Name']}** | {row['Source']} | {row['Status']} | {row['ServiceType']} | {row['Notes']}")
-            if cols[1].button("✏️ Edit", key=f"edit_{row['SubmissionID']}"):
-                st.session_state["edit_ticket"] = row["SubmissionID"]
-                st.rerun()
+        st.dataframe(df[["Name","Source","Status","ServiceType","Notes"]])
+        # Export button
+        buffer = BytesIO()
+        df.to_excel(buffer, index=False)
+        st.download_button("📥 Export All Tickets", buffer.getvalue(), "all_tickets.xlsx")
 
-with tab_edit:
-    st.subheader("📝 Edit Ticket")
-    if not st.session_state["edit_ticket"]:
-        st.info("Select a ticket from All Tickets to edit.")
+with tab_kpi:
+    st.subheader("📊 KPI Dashboard")
+    if df.empty:
+        st.info("No data available")
     else:
-        sub_id = st.session_state["edit_ticket"]
-        ticket = st.session_state["all_data"][st.session_state["all_data"]["SubmissionID"] == sub_id].iloc[0]
-        with st.form("edit_ticket_form"):
-            name = st.text_input("Name", value=ticket["Name"] or "")
-            source = st.text_input("Source", value=ticket["Source"] or "")
-            status = st.selectbox("Status", STATUS_LIST, index=STATUS_LIST.index(ticket["Status"]) if ticket["Status"] in STATUS_LIST else 0)
-            service = st.text_input("Service Type", value=ticket["ServiceType"] or "")
-            lost = st.text_input("Lost Reason", value=ticket["LostReason"] or "")
-            notes = st.text_area("Notes", value=ticket["Notes"] or "")
-            submitted = st.form_submit_button("💾 Save Changes")
-            if submitted:
-                payload = {}
-                if name != ticket["Name"]:
-                    parts = name.split(" ",1)
-                    payload[f"submission[{FIELD_ID['name']}][first]"] = parts[0]
-                    payload[f"submission[{FIELD_ID['name']}][last]"] = parts[1] if len(parts)>1 else ""
-                if source != ticket["Source"]:
-                    payload[f"submission[{FIELD_ID['source']}]"] = source
-                if status != ticket["Status"]:
-                    payload[f"submission[{FIELD_ID['status']}]"] = status
-                    payload[f"submission[{STATUS_TO_FIELD[status]}]"] = datetime.now().isoformat()
-                if service != ticket["ServiceType"]:
-                    payload[f"submission[{FIELD_ID['service_type']}]"] = service
-                if lost != ticket["LostReason"]:
-                    payload[f"submission[{FIELD_ID['lost_reason']}]"] = lost
-                if notes != ticket["Notes"]:
-                    payload[f"submission[{FIELD_ID['notes']}]"] = notes
-                if payload:
-                    ok,msg = update_submission(sub_id,payload)
-                    if ok:
-                        st.success("✅ Ticket updated")
-                        st.session_state["edit_ticket"]=None
-                        st.rerun()
-                    else:
-                        st.error(f"❌ Failed: {msg}")
-        if st.button("🗑 Delete Ticket", type="primary"):
-            ok,msg = delete_submission(sub_id)
-            if ok:
-                st.success("✅ Ticket deleted")
-                st.session_state["edit_ticket"]=None
-                st.rerun()
-            else:
-                st.error(f"❌ Failed to delete: {msg}")
+        by_src = df.groupby("Source").size().reset_index(name="Leads")
+        st.bar_chart(by_src.set_index("Source"))
+        # Export KPI
+        buffer = BytesIO()
+        df.to_excel(buffer, index=False)
+        st.download_button("📥 Export KPI Data", buffer.getvalue(), "kpi_data.xlsx")
 
-with tab_add:
-    st.subheader("➕ Add Ticket")
-    with st.form("add_ticket_form"):
-        first = st.text_input("First Name")
-        last = st.text_input("Last Name")
-        source = st.selectbox("Source", ["Email","Phone","Walk In","Social Media","In Person"])
-        status = st.selectbox("Status", STATUS_LIST, index=0)
-        service = st.selectbox("Service Type", ["Internet","Phone","TV","Internet and Phone","Internet and TV","Internet and Cell Phone"])
-        lost = st.text_input("Lost Reason")
-        notes = st.text_area("Notes")
-        street1 = st.text_input("Street 1")
-        street2 = st.text_input("Street 2")
-        city = st.text_input("City")
-        state = st.text_input("State")
-        postal = st.text_input("Postal Code")
-        submitted = st.form_submit_button("➕ Add")
-        if submitted:
-            payload = {
-                f"submission[{FIELD_ID['name']}][first]": first,
-                f"submission[{FIELD_ID['name']}][last]": last,
-                f"submission[{FIELD_ID['source']}]": source,
-                f"submission[{FIELD_ID['status']}]": status,
-                f"submission[{FIELD_ID['service_type']}]": service,
-                f"submission[{FIELD_ID['lost_reason']}]": lost,
-                f"submission[{FIELD_ID['notes']}]": notes,
-                f"submission[{FIELD_ID['address']}][addr_line1]": street1,
-                f"submission[{FIELD_ID['address']}][addr_line2]": street2,
-                f"submission[{FIELD_ID['address']}][city]": city,
-                f"submission[{FIELD_ID['address']}][state]": state,
-                f"submission[{FIELD_ID['address']}][postal]": postal
-            }
-            if status in STATUS_TO_FIELD:
-                payload[f"submission[{STATUS_TO_FIELD[status]}]"] = datetime.now().isoformat()
-            ok,msg = add_submission(payload)
-            if ok:
-                st.success("✅ Ticket added")
-                st.rerun()
-            else:
-                st.error(f"❌ Failed: {msg}")
+with tab_settings:
+    st.subheader("⚙️ Settings")
+    blocked = st.text_area("Blocked Words (comma-separated)", value=",".join(blocked_words))
+    rem_days = st.number_input("Reminder Days", min_value=1, value=reminder_days)
+    if st.button("💾 Save Settings"):
+        settings["blocked_words"] = [w.strip() for w in blocked.split(",") if w.strip()]
+        settings["reminder_days"] = rem_days
+        save_settings(settings)
+        st.success("Settings saved")
