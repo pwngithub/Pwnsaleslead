@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 import os, json
 from datetime import datetime
+import plotly.express as px
 from config import API_KEY, FORM_ID, FIELD_ID, BLOCKED_WORDS as DEFAULT_BLOCKED
 
 JOTFORM_API = "https://api.jotform.com"
@@ -85,7 +86,6 @@ def apply_blocklist(df, blocked_words):
     return df, hidden_count
 
 def update_submission(sub_id, payload: dict):
-    # Partial update to JotForm
     url = f"{JOTFORM_API}/submission/{sub_id}?apiKey={API_KEY}"
     resp = requests.post(url, data=payload, timeout=30)
     return resp.status_code == 200, resp.text
@@ -95,8 +95,13 @@ def delete_submission(sub_id):
     resp = requests.delete(url, timeout=30)
     return resp.status_code == 200, resp.text
 
-st.set_page_config(page_title="Sales Lead Tracker v19.10.3", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.10.3 — Full CRUD")
+def add_submission(payload: dict):
+    url = f"{JOTFORM_API}/form/{FORM_ID}/submissions?apiKey={API_KEY}"
+    resp = requests.post(url, data=payload, timeout=30)
+    return resp.status_code == 200, resp.text
+
+st.set_page_config(page_title="Sales Lead Tracker v19.10.4", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.10.4 — Full CRUD + Analytics")
 
 settings = load_settings()
 blocked_words = settings.get("blocked_words", DEFAULT_BLOCKED)
@@ -110,7 +115,9 @@ if hidden_count > 0:
     st.info(f"ℹ️ {hidden_count} tickets hidden (blocked words: {', '.join(blocked_words)})")
 
 # Tabs
-tab_all, tab_edit = st.tabs(["📋 All Tickets", "📝 Edit Ticket"])
+tab_all, tab_edit, tab_add, tab_pipeline, tab_reminders, tab_kpi, tab_settings = st.tabs(
+    ["📋 All Tickets", "📝 Edit Ticket", "➕ Add Ticket", "🗂 Pipeline", "⏰ Reminders", "📊 KPI Dashboard", "⚙️ Settings"]
+)
 
 if "edit_ticket" not in st.session_state:
     st.session_state["edit_ticket"] = None
@@ -172,3 +179,97 @@ with tab_edit:
                 st.experimental_rerun()
             else:
                 st.error(f"❌ Failed to delete: {msg}")
+
+with tab_add:
+    st.subheader("➕ Add Ticket")
+    with st.form("add_ticket_form"):
+        first = st.text_input("First Name")
+        last = st.text_input("Last Name")
+        source = st.selectbox("Source", ["Email","Phone","Walk In","Social Media","In Person"])
+        status = st.selectbox("Status", STATUS_LIST, index=0)
+        service = st.selectbox("Service Type", ["Internet","Phone","TV","Internet and Phone","Internet and TV","Internet and Cell Phone"])
+        lost = st.text_input("Lost Reason")
+        submitted = st.form_submit_button("➕ Add")
+        if submitted:
+            payload = {
+                f"submission[{FIELD_ID['name']}][first]": first,
+                f"submission[{FIELD_ID['name']}][last]": last,
+                f"submission[{FIELD_ID['source']}]": source,
+                f"submission[{FIELD_ID['status']}]": status,
+                f"submission[{FIELD_ID['service_type']}]": service,
+                f"submission[{FIELD_ID['lost_reason']}]": lost
+            }
+            if status in STATUS_TO_FIELD:
+                payload[f"submission[{STATUS_TO_FIELD[status]}]"] = datetime.now().isoformat()
+            ok,msg = add_submission(payload)
+            if ok:
+                st.success("✅ Ticket added")
+                st.experimental_rerun()
+            else:
+                st.error(f"❌ Failed: {msg}")
+
+with tab_pipeline:
+    st.subheader("🗂 Pipeline")
+    if st.checkbox("⚡ Quick Add Lead"):
+        with st.form("quick_add"):
+            qname = st.text_input("Name")
+            qsource = st.selectbox("Source", ["Email","Phone","Walk In","Social Media","In Person"], key="qsource")
+            qstatus = st.selectbox("Status", STATUS_LIST, index=0, key="qstatus")
+            qsub = st.form_submit_button("Add")
+            if qsub:
+                parts = qname.split(" ",1)
+                payload = {
+                    f"submission[{FIELD_ID['name']}][first]": parts[0] if parts else "",
+                    f"submission[{FIELD_ID['name']}][last]": parts[1] if len(parts)>1 else "",
+                    f"submission[{FIELD_ID['source']}]": qsource,
+                    f"submission[{FIELD_ID['status']}]": qstatus
+                }
+                if qstatus in STATUS_TO_FIELD:
+                    payload[f"submission[{STATUS_TO_FIELD[qstatus]}]"] = datetime.now().isoformat()
+                ok,msg = add_submission(payload)
+                if ok:
+                    st.success("✅ Quick ticket added")
+                    st.experimental_rerun()
+                else:
+                    st.error(f"❌ Failed: {msg}")
+    if not df.empty:
+        for status in STATUS_LIST:
+            st.markdown(f"### {status}")
+            subset = df[df["Status"]==status]
+            for _, row in subset.iterrows():
+                st.write(f"- {row['Name']} ({row['Source']})")
+
+with tab_reminders:
+    st.subheader("⏰ Reminders")
+    if not df.empty:
+        now = pd.to_datetime(datetime.now())
+        df["LastUpdated"] = pd.to_datetime(df[["ts_survey_scheduled","ts_survey_completed","ts_scheduled","ts_installed","ts_waiting"]].max(axis=1), errors="coerce")
+        df["DaysSince"] = (now - df["LastUpdated"]).dt.days
+        reminders = df[df["DaysSince"]>=reminder_days]
+        st.write(reminders[["Name","Status","DaysSince"]])
+    else:
+        st.info("No tickets available.")
+
+with tab_kpi:
+    st.subheader("📊 KPI Dashboard")
+    if not df.empty:
+        by_src = df.groupby("Source").size().reset_index(name="Leads")
+        fig1 = px.bar(by_src, x="Source", y="Leads", title="Leads by Source")
+        st.plotly_chart(fig1, use_container_width=True)
+        lost = df[df["Status"]=="Lost"]
+        if not lost.empty:
+            by_reason = lost.groupby("LostReason").size().reset_index(name="LostLeads")
+            fig2 = px.bar(by_reason, x="LostReason", y="LostLeads", title="Lost Leads by Reason")
+            st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("No data for KPI.")
+
+with tab_settings:
+    st.subheader("⚙️ Settings")
+    bw = st.text_area("Blocked Words (comma separated)", value=",".join(blocked_words))
+    rd = st.number_input("Reminder Threshold (days)", min_value=1, max_value=30, value=reminder_days)
+    if st.button("💾 Save Settings"):
+        settings["blocked_words"] = [b.strip() for b in bw.split(",") if b.strip()]
+        settings["reminder_days"] = int(rd)
+        save_settings(settings)
+        st.success("✅ Settings saved")
