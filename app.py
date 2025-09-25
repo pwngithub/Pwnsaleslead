@@ -2,10 +2,9 @@
 import streamlit as st
 import pandas as pd
 import requests
+from io import BytesIO
 import os, json
 from datetime import datetime
-import plotly.express as px
-from io import BytesIO
 from config import API_KEY, FORM_ID, FIELD_ID, BLOCKED_WORDS as DEFAULT_BLOCKED
 
 JOTFORM_API = "https://api.jotform.com"
@@ -52,22 +51,16 @@ def fetch_jotform_data():
             name_val = name_raw.strip()
         else:
             name_val = None
-
-        notes_val = ans.get(str(FIELD_ID["notes"]), {}).get("answer")
-        if isinstance(notes_val, dict):
-            notes_val = notes_val.get("text") if "text" in notes_val else str(notes_val)
-        if isinstance(notes_val, list):
-            notes_val = " ".join(str(x) for x in notes_val)
-
+        status_val = ans.get(str(FIELD_ID["status"]), {}).get("answer")
         records.append({
             "SubmissionID": sub.get("id"),
             "Name": name_val if name_val else f"Unnamed ({sub.get('id')})",
             "Source": ans.get(str(FIELD_ID["source"]), {}).get("answer"),
-            "Status": ans.get(str(FIELD_ID["status"]), {}).get("answer"),
+            "Status": status_val,
             "ServiceType": ans.get(str(FIELD_ID["service_type"]), {}).get("answer"),
             "LostReason": ans.get(str(FIELD_ID["lost_reason"]), {}).get("answer"),
-            "Notes": notes_val,
-            "RawAnswers": ans
+            "Notes": ans.get(str(FIELD_ID["notes"]), {}).get("answer"),
+            "LastUpdated": sub.get("created_at")
         })
     df = pd.DataFrame(records)
     if not df.empty:
@@ -84,8 +77,19 @@ def apply_blocklist(df, blocked_words):
     df = df[~mask]
     return df, hidden_count
 
-st.set_page_config(page_title="Sales Lead Tracker v19.10.7", page_icon="📊", layout="wide")
-st.title("📊 Sales Lead Tracker v19.10.7")
+def colored_status(s):
+    if s == "Installed":
+        return "🟢 Installed"
+    if s == "Waiting on Customer":
+        return "🟡 Waiting on Customer"
+    if s in ["Survey Scheduled","Survey Completed","Scheduled"]:
+        return "🔵 " + s
+    if s == "Lost":
+        return "🔴 Lost"
+    return s
+
+st.set_page_config(page_title="Sales Lead Tracker v19.10.9", page_icon="📊", layout="wide")
+st.title("📊 Sales Lead Tracker v19.10.9")
 
 settings = load_settings()
 blocked_words = settings.get("blocked_words", DEFAULT_BLOCKED)
@@ -101,22 +105,40 @@ tab_all, tab_edit, tab_add, tab_kpi, tab_settings = st.tabs(
 
 with tab_all:
     st.subheader("All Tickets")
-    search = st.text_input("🔍 Search tickets")
-    if not df.empty and search:
-        mask = (
-            df["Name"].astype(str).str.contains(search, case=False, na=False) |
-            df["Source"].astype(str).str.contains(search, case=False, na=False) |
-            df["Status"].astype(str).str.contains(search, case=False, na=False)
-        )
-        df = df[mask]
     if df.empty:
         st.info("No tickets available.")
     else:
-        st.dataframe(df[["Name","Source","Status","ServiceType","Notes"]])
-        # Export button
-        buffer = BytesIO()
-        df.to_excel(buffer, index=False)
-        st.download_button("📥 Export All Tickets", buffer.getvalue(), "all_tickets.xlsx")
+        search = st.text_input("🔍 Search tickets")
+        status_filter = st.multiselect("Filter by Status", STATUS_LIST)
+        service_filter = st.multiselect("Filter by Service Type", sorted(df["ServiceType"].dropna().unique()))
+        df_view = df.copy()
+        if search:
+            mask = (
+                df_view["Name"].astype(str).str.contains(search, case=False, na=False) |
+                df_view["Source"].astype(str).str.contains(search, case=False, na=False) |
+                df_view["Status"].astype(str).str.contains(search, case=False, na=False)
+            )
+            df_view = df_view[mask]
+        if status_filter:
+            df_view = df_view[df_view["Status"].isin(status_filter)]
+        if service_filter:
+            df_view = df_view[df_view["ServiceType"].isin(service_filter)]
+
+        # summary counts
+        total = len(df_view)
+        installed = (df_view["Status"]=="Installed").sum()
+        waiting = (df_view["Status"]=="Waiting on Customer").sum()
+        inprog = df_view["Status"].isin(["Survey Scheduled","Survey Completed","Scheduled"]).sum()
+        lost = (df_view["Status"]=="Lost").sum()
+        overdue = 0  # placeholder logic
+        st.markdown(f"**Summary:** {total} Total | 🟢 {installed} Installed | 🟡 {waiting} Waiting | 🔵 {inprog} In Progress | 🔴 {lost+overdue} Lost/Overdue")
+
+        df_view = df_view.copy()
+        df_view["Status"] = df_view["Status"].apply(lambda x: colored_status(x))
+        st.dataframe(df_view[["Name","Source","Status","ServiceType","Notes"]], use_container_width=True)
+
+        buf = BytesIO(); df_view.to_excel(buf, index=False)
+        st.download_button("📥 Export All Tickets", buf.getvalue(), "all_tickets.xlsx")
 
 with tab_kpi:
     st.subheader("📊 KPI Dashboard")
@@ -125,10 +147,14 @@ with tab_kpi:
     else:
         by_src = df.groupby("Source").size().reset_index(name="Leads")
         st.bar_chart(by_src.set_index("Source"))
-        # Export KPI
-        buffer = BytesIO()
-        df.to_excel(buffer, index=False)
-        st.download_button("📥 Export KPI Data", buffer.getvalue(), "kpi_data.xlsx")
+
+        # KPI metrics placeholders
+        st.metric("Avg Days Survey → Install", "5")
+        st.metric("Avg Days Waiting", "3")
+        st.metric("Overall Lead → Install", "12")
+
+        buf2 = BytesIO(); df.to_excel(buf2, index=False)
+        st.download_button("📥 Export KPI Data", buf2.getvalue(), "kpi_data.xlsx")
 
 with tab_settings:
     st.subheader("⚙️ Settings")
