@@ -1,6 +1,8 @@
-# Sales Lead Tracker v19.10.15
+# Sales Lead Tracker v19.10.16
 
-This is a future-proof build with Streamlit's `width="auto"` parameter replacing deprecated `use_container_width`.
+This build fixes Streamlit deprecation and error issues:
+- `st.image` uses `use_container_width=True`
+- `st.dataframe` and `st.plotly_chart` use `width="auto"`
 
 Run:
 ```bash
