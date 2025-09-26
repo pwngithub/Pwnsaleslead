@@ -13,5 +13,5 @@ FIELD_ID = {
     "waiting_on_customer": 16,
     "lost_reason": 17,
     "service_type": 18,
-    "address": 19               # address composite (not used in v19.10.11)
+    "address": 19               # composite
 }
