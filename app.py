@@ -86,7 +86,7 @@ tab_info, tab_all, tab_add = st.tabs(["ℹ️ Info","📋 All Tickets","➕ Add 
 
 with tab_info:
     if LOGO_URL:
-        st.image(LOGO_URL, use_column_width=False, width=360)
+        st.image(LOGO_URL, use_container_width=True)
     st.markdown("## <span class='brand-title'>Pioneer Broadband — Sales Lead Tracker</span>", unsafe_allow_html=True)
     st.write("- Add Ticket: create a new lead (if Status = Survey Scheduled, date auto-stamped)")
     st.write("- All Tickets: view, filter, KPIs, export. Click 'Edit a Ticket' below the table to update Status, Notes, Lost Reason.")
