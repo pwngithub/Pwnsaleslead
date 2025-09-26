@@ -1,9 +1,9 @@
-# Sales Lead Tracker v19.10.17
+# Sales Lead Tracker v19.10.18
 
-This build corrects width handling for Streamlit:
+This build corrects all Streamlit/Plotly deprecations:
 - `st.image` → use_container_width=True
 - `st.dataframe` → use_container_width=True
-- `st.plotly_chart` → width="auto"
+- `st.plotly_chart` → use_container_width=True, config={"responsive": True}
 
 Run:
 ```bash
