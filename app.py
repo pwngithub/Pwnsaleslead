@@ -276,7 +276,7 @@ with tab_all:
                 st.session_state["just_edited"]["id"] = sub_id
                 fetch_data.clear()
                 st.success("Saved")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error(f"Save failed ({resp.status_code}): {resp.text}")
 
@@ -284,7 +284,7 @@ with tab_all:
     if cA.button("Clear Highlights"):
         st.session_state["just_added"] = {"id": None}
         st.session_state["just_edited"] = {"id": None}
-        st.experimental_rerun()
+        st.rerun()
 
     def build_excel_bytes(filtered_df, avg_duration_df, conv_df, by_status_s, by_service_s, lost_counts_df):
         raw = filtered_df.copy()
@@ -363,6 +363,6 @@ with tab_add:
                 st.session_state["just_added"]["id"] = new_id
                 fetch_data.clear()
                 st.success("Created. Switching to All Tickets…")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error(f"Create failed ({resp.status_code}): {resp.text}")
