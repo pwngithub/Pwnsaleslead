@@ -1,15 +1,9 @@
-# Sales Lead Tracker v19.10.21
+# Sales Lead Tracker v19.10.22
 
-Features:
-- Live JotForm integration with form ID 252598168633065
-- Fixed datetime parsing for created_at/updated_at fields
-- All Tickets (default): view, edit, delete
-- Add Ticket: create new submission
-- Audit log: Add/Edit/Delete actions to audit_log.csv
-- Deprecation fixes: use_container_width + Plotly config
-
-Run:
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
+- Top tabs: All Tickets, Add Ticket, KPI Dashboard, Audit Log
+- All Tickets: search + filters (Source, Status, Service Type, Lost Reason), inline Edit/Delete
+- Add Ticket: posts to JotForm; auto-stamps Survey Scheduled date
+- KPI Dashboard: charts and conversion table
+- Audit Log: shows CSV and provides Clear button
+- JotForm form: 252598168633065
+- Deprecation-safe rendering (use_container_width + Plotly config)
