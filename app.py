@@ -8,7 +8,7 @@ import os
 
 from config import API_KEY, FORM_ID, FIELD_ID
 
-st.set_page_config(page_title="Sales Lead Tracker v19.10.20", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Sales Lead Tracker v19.10.21", page_icon="📊", layout="wide")
 
 BASE_URL = "https://api.jotform.com"
 
@@ -29,7 +29,7 @@ def fetch_submissions():
             "Notes": answers.get(str(FIELD_ID['notes']), {}).get("answer"),
             "LostReason": answers.get(str(FIELD_ID['lost_reason']), {}).get("answer"),
             "Address": answers.get(str(FIELD_ID['address']), {}).get("answer", {}),
-            "LastUpdated": datetime.fromtimestamp(int(item.get("updated_at", item.get("created_at")))),
+            "LastUpdated": pd.to_datetime(item.get("updated_at") or item.get("created_at")),
         })
     return pd.DataFrame(out)
 
