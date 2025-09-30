@@ -1,11 +1,11 @@
-# Sales Lead Tracker v19.10.19
+# Sales Lead Tracker v19.10.20
 
 Features:
-- Loads into **All Tickets** by default
-- Only **All Tickets** and **Add Ticket** navigation at top
-- `st.image` → use_container_width=True
-- `st.dataframe` → use_container_width=True
-- `st.plotly_chart` → use_container_width=True, config={"responsive": True}
+- Live JotForm integration with form ID 252598168633065
+- All Tickets (default): view, edit, delete
+- Add Ticket: create new submission
+- Audit log: Add/Edit/Delete actions to audit_log.csv
+- Deprecation fixes: use_container_width + Plotly config
 
 Run:
 ```bash

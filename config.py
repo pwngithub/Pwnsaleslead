@@ -1,3 +1,18 @@
-API_KEY = "your_api_key_here"
-FORM_ID = "your_form_id_here"
-FIELD_ID = {}
+API_KEY = "22179825a79dba61013e4fc3b9d30fa4"
+FORM_ID = "252598168633065"
+
+FIELD_ID = {
+    "name_first": "first_3",
+    "name_last": "last_3",
+    "source": 4,
+    "status": 6,
+    "notes": 10,
+    "lost_reason": 17,
+    "service_type": 18,
+    "address": 19,
+    "survey_scheduled_date": 12,
+    "survey_completed_date": 13,
+    "scheduled_date": 14,
+    "installed_date": 15,
+    "waiting_on_customer_date": 16,
+}
