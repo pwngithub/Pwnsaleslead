@@ -14,7 +14,7 @@ streamlit run app.py
 3. Updates auto-deploy when you push new versions
 
 ## Versioning
-- Current Build: v19.5
+- Current Build: v19.6
 - Versions auto-increment with each release
 - The app shows current version and latest change under the logo
 - Full history in CHANGELOG.md
