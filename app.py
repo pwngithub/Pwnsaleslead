@@ -1,5 +1,5 @@
 # Pioneer Sales Lead App – v19.10.30
-# Pipeline with reliable quick-move controls (no drag lib), KPI tab included
+# Pipeline with reliable quick-move controls (no drag lib), KPI included
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -46,6 +46,29 @@ def initialize_data():
         st.session_state.df = pd.DataFrame(columns=["SubmissionID","Name","ContactSource","Status","TypeOfService","LostReason","Notes","CreatedAt","LastUpdated"])
         st.caption("ℹ️ No local CSV found — JotForm fallback not enabled in this build")
 
+# --- CALLBACK FUNCTIONS FOR WIDGETS ---
+def update_ticket_status(submission_id, new_status):
+    """Updates status and saves the DataFrame, without calling rerun."""
+    ix = st.session_state.df.index[st.session_state.df["SubmissionID"] == submission_id]
+    if len(ix):
+        st.session_state.df.loc[ix, "Status"] = new_status
+        st.session_state.df.loc[ix, "LastUpdated"] = pd.Timestamp.now()
+        st.session_state.df.to_csv(SEED_FILE, index=False)
+        st.success(f"Moved ticket {submission_id} to {new_status}") # Success message on save
+
+def update_ticket_details(sid, new_status, new_service, new_lost, new_notes):
+    """Updates all details and saves the DataFrame, without calling rerun."""
+    ix = st.session_state.df.index[st.session_state.df["SubmissionID"] == sid]
+    if len(ix):
+        st.session_state.df.loc[ix, "Status"] = new_status
+        st.session_state.df.loc[ix, "TypeOfService"] = new_service
+        st.session_state.df.loc[ix, "LostReason"] = new_lost if new_lost else None
+        st.session_state.df.loc[ix, "Notes"] = new_notes
+        st.session_state.df.loc[ix, "LastUpdated"] = pd.Timestamp.now()
+        st.session_state.df.to_csv(SEED_FILE, index=False)
+        st.success(f"Ticket {sid} changes saved.") # Success message on save
+# ------------------------------------
+
 def main_app():
     # Header
     left, mid = st.columns([1,5])
@@ -81,21 +104,22 @@ def main_app():
                         st.write("—")
                     else:
                         for _, row in subset.sort_values("LastUpdated", ascending=False).iterrows():
-                            with st.expander(f"{row['Name']} · {row.get('TypeOfService','')}"):
+                            with st.expander(f"{row['Name']} · {row.get('TypeOfService','')}", expanded=False):
                                 st.caption(f"Updated: {row['LastUpdated'].strftime('%Y-%m-%d %H:%M')}")
                                 st.write(row.get("Notes",""))
                                 
                                 # quick move control
-                                move_to = st.selectbox("Move to", STATUS_LIST, index=STATUS_LIST.index(status), key=f"mv_{row['SubmissionID']}")
-                                
-                                if move_to != status:
-                                    ix = st.session_state.df.index[st.session_state.df["SubmissionID"]==row["SubmissionID"]]
-                                    if len(ix):
-                                        st.session_state.df.loc[ix, "Status"] = move_to
-                                        st.session_state.df.loc[ix, "LastUpdated"] = pd.Timestamp.now()
-                                        st.session_state.df.to_csv(SEED_FILE, index=False)
-                                        st.success(f"Moved to {move_to}")
-                                        st.experimental_rerun()
+                                # ❌ REMOVED: if move_to != status: ... st.experimental_rerun()
+                                # ✅ FIX: Use on_change callback to update data without rerun
+                                st.selectbox(
+                                    "Move to", 
+                                    STATUS_LIST, 
+                                    index=STATUS_LIST.index(status), 
+                                    key=f"mv_{row['SubmissionID']}",
+                                    on_change=update_ticket_status,
+                                    args=(row['SubmissionID'], st.session_state[f"mv_{row['SubmissionID']}"])
+                                )
+
 
     with tab_all:
         st.subheader("All Tickets")
@@ -125,42 +149,43 @@ def main_app():
         with st.form("add"):
             c1,c2 = st.columns(2)
             with c1:
-                first = st.text_input("First Name *")
-                source = st.selectbox("Contact Source *", ["","Email","Phone Call","Walk In","Social Media","In Person"])
-                status = st.selectbox("Status *", [""]+STATUS_LIST)
+                first = st.text_input("First Name *", key="add_first")
+                source = st.selectbox("Contact Source *", ["","Email","Phone Call","Walk In","Social Media","In Person"], key="add_source")
+                status = st.selectbox("Status *", [""]+STATUS_LIST, key="add_status")
             with c2:
-                last = st.text_input("Last Name *")
-                service = st.selectbox("Type of Service *", [""]+SERVICE_TYPES)
-                notes = st.text_area("Notes")
-            lost = st.text_input("Lost Reason")
-            ok = st.form_submit_button("Create Ticket")
-        if ok:
-            miss = [n for n,vv in [("First Name",first),("Last Name",last),("Source",source),("Status",status),("Service",service)] if not vv]
-            if miss:
-                st.error("Missing: " + ", ".join(miss))
-            else:
-                sid = f"seed_{int(datetime.now().timestamp())}"
-                row = {
-                    "SubmissionID": sid,
-                    "Name": f"{first} {last}",
-                    "ContactSource": source,
-                    "Status": status,
-                    "TypeOfService": service,
-                    "LostReason": lost or None,
-                    "Notes": notes or "",
-                    "Street": None,"City": None,"State": None,"Postal": None,
-                    "CreatedAt": datetime.now(),
-                    "LastUpdated": datetime.now(),
-                }
-                
-                current_df = st.session_state.df
-                new_row_df = pd.DataFrame([row], columns=current_df.columns)
-                
-                st.session_state.df = pd.concat([current_df, new_row_df], ignore_index=True)
-                st.session_state.df.to_csv(SEED_FILE, index=False)
-                
-                st.success("Ticket created.")
-                st.experimental_rerun()
+                last = st.text_input("Last Name *", key="add_last")
+                service = st.selectbox("Type of Service *", [""]+SERVICE_TYPES, key="add_service")
+                notes = st.text_area("Notes", key="add_notes")
+            lost = st.text_input("Lost Reason", key="add_lost")
+            
+            if st.form_submit_button("Create Ticket"):
+                # Data validation and adding logic remains the same
+                miss = [n for n,vv in [("First Name",st.session_state.add_first),("Last Name",st.session_state.add_last),("Source",st.session_state.add_source),("Status",st.session_state.add_status),("Service",st.session_state.add_service)] if not vv]
+                if miss:
+                    st.error("Missing: " + ", ".join(miss))
+                else:
+                    sid = f"seed_{int(datetime.now().timestamp())}"
+                    row = {
+                        "SubmissionID": sid,
+                        "Name": f"{st.session_state.add_first} {st.session_state.add_last}",
+                        "ContactSource": st.session_state.add_source,
+                        "Status": st.session_state.add_status,
+                        "TypeOfService": st.session_state.add_service,
+                        "LostReason": st.session_state.add_lost or None,
+                        "Notes": st.session_state.add_notes or "",
+                        "Street": None,"City": None,"State": None,"Postal": None,
+                        "CreatedAt": datetime.now(),
+                        "LastUpdated": datetime.now(),
+                    }
+                    
+                    current_df = st.session_state.df
+                    new_row_df = pd.DataFrame([row], columns=current_df.columns)
+                    
+                    st.session_state.df = pd.concat([current_df, new_row_df], ignore_index=True)
+                    st.session_state.df.to_csv(SEED_FILE, index=False)
+                    
+                    st.success("Ticket created. Refresh the page to see it in the Pipeline view.")
+                    # ⚠️ Removed st.experimental_rerun()
 
     with tab_edit:
         st.subheader("Edit Ticket")
@@ -173,34 +198,36 @@ def main_app():
             if not opts:
                 st.info("No selectable tickets.")
             else:
-                sel = st.selectbox("Select by Name", list(opts.keys()))
+                # Use a unique key for the selection box
+                sel = st.selectbox("Select by Name", list(opts.keys()), key="edit_sel")
                 sid = opts[sel]
                 row = st.session_state.df[st.session_state.df["SubmissionID"]==sid].iloc[0]
                 
                 c1,c2 = st.columns(2)
                 with c1:
                     new_status = st.selectbox("Status", STATUS_LIST, 
-                                              index=STATUS_LIST.index(row["Status"]) if row["Status"] in STATUS_LIST else 0)
+                                            index=STATUS_LIST.index(row["Status"]) if row["Status"] in STATUS_LIST else 0,
+                                            key="edit_status")
                     new_service = st.selectbox("Type of Service", SERVICE_TYPES, 
-                                               index=SERVICE_TYPES.index(row["TypeOfService"]) if row["TypeOfService"] in SERVICE_TYPES else 0)
+                                                index=SERVICE_TYPES.index(row["TypeOfService"]) if row["TypeOfService"] in SERVICE_TYPES else 0,
+                                                key="edit_service")
                 with c2:
-                    new_lost = st.text_input("Lost Reason", value=row.get("LostReason") or "")
-                    new_notes = st.text_area("Notes", value=row.get("Notes") or "")
+                    new_lost = st.text_input("Lost Reason", value=row.get("LostReason") or "", key="edit_lost")
+                    new_notes = st.text_area("Notes", value=row.get("Notes") or "", key="edit_notes")
                     
+                # ❌ REMOVED: st.button("Save Changes") followed by st.experimental_rerun()
+                # ✅ FIX: Use the callback function and pass the session state values as args
                 if st.button("Save Changes"):
-                    ix = st.session_state.df.index[st.session_state.df["SubmissionID"]==sid]
-                    
-                    if len(ix):
-                        st.session_state.df.loc[ix, "Status"] = new_status
-                        st.session_state.df.loc[ix, "TypeOfService"] = new_service
-                        st.session_state.df.loc[ix, "LostReason"] = new_lost if new_lost else None
-                        st.session_state.df.loc[ix, "Notes"] = new_notes
-                        st.session_state.df.loc[ix, "LastUpdated"] = pd.Timestamp.now()
-                        
-                        st.session_state.df.to_csv(SEED_FILE, index=False)
-                        
-                    st.success("Saved.")
-                    st.experimental_rerun() # Line 214 fix
+                    update_ticket_details(
+                        sid, 
+                        st.session_state.edit_status, 
+                        st.session_state.edit_service, 
+                        st.session_state.edit_lost, 
+                        st.session_state.edit_notes
+                    )
+                    st.info("Changes saved. Refresh the page to see them applied in the Pipeline view.")
+                    # ⚠️ Removed st.experimental_rerun()
+
 
     with tab_kpi:
         st.subheader("KPI Dashboard")
