@@ -29,7 +29,7 @@ with mid:
     st.title("Sales Lead Tracker — Pipeline")
 
 # ==============================================================================
-# 🚀 FIX: Load and manage data using st.session_state for stability
+# Load and manage data using st.session_state
 # ==============================================================================
 
 if 'df' not in st.session_state:
@@ -51,7 +51,8 @@ if 'df' not in st.session_state:
         st.caption("ℹ️ No local CSV found — JotForm fallback not enabled in this build")
 
 # Create a local reference to the session state DataFrame for cleaner code
-df = st.session_state.df
+# Note: All modifications must target st.session_state.df directly.
+df = st.session_state.df 
 
 # Tabs
 tab_pipe, tab_all, tab_add, tab_edit, tab_kpi = st.tabs(["🧩 Pipeline View","📋 All Tickets","➕ Add Ticket","✏️ Edit Ticket","📈 KPI"])
@@ -146,9 +147,7 @@ with tab_add:
                 "LastUpdated": datetime.now(),
             }
             
-            # FIX: Use st.session_state.df for the update logic
-            # Ensure all required columns are present before concat
-            # This is safer than reading the CSV again
+            # Use st.session_state.df for the update logic
             current_df = st.session_state.df
             new_row_df = pd.DataFrame([row], columns=current_df.columns)
             
@@ -160,10 +159,13 @@ with tab_add:
 
 with tab_edit:
     st.subheader("Edit Ticket")
-    if df.empty:
+    
+    # FIX: Use st.session_state.df directly to ensure it's the live data
+    if st.session_state.df.empty: 
         st.info("No tickets to edit.")
     else:
-        opts = {r["Name"]: r["SubmissionID"] for _, r in df.iterrows()}
+        # FIX: Ensure opts dictionary is built from st.session_state.df
+        opts = {r["Name"]: r["SubmissionID"] for _, r in st.session_state.df.iterrows()}
         
         # Guard clause for empty options
         if not opts:
@@ -171,7 +173,9 @@ with tab_edit:
         else:
             sel = st.selectbox("Select by Name", list(opts.keys()))
             sid = opts[sel]
-            row = df[df["SubmissionID"]==sid].iloc[0]
+            # FIX: Ensure row is selected from st.session_state.df
+            row = st.session_state.df[st.session_state.df["SubmissionID"]==sid].iloc[0]
+            
             c1,c2 = st.columns(2)
             with c1:
                 new_status = st.selectbox("Status", STATUS_LIST, 
@@ -184,7 +188,7 @@ with tab_edit:
                 new_notes = st.text_area("Notes", value=row.get("Notes") or "")
                 
             if st.button("Save Changes"):
-                # FIX: Use st.session_state.df for the update logic
+                # Use st.session_state.df for the update logic
                 ix = st.session_state.df.index[st.session_state.df["SubmissionID"]==sid]
                 
                 if len(ix):
@@ -198,7 +202,7 @@ with tab_edit:
                     st.session_state.df.to_csv(SEED_FILE, index=False)
                     
                 st.success("Saved.")
-                st.experimental_rerun() # Line ~188 fix
+                st.experimental_rerun() # Line ~201 fix
 
 with tab_kpi:
     st.subheader("KPI Dashboard")
