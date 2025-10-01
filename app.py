@@ -77,7 +77,8 @@ with tab_pipe:
                                     df.loc[ix, "LastUpdated"] = pd.Timestamp.now()
                                     df.to_csv(SEED_FILE, index=False)
                                 st.success(f"Moved to {move_to}")
-                                st.experimental_rerun()
+                                st.session_state["edited_ticket"] = ticket
+    st.success("✅ Ticket updated successfully!")
 
 with tab_all:
     st.subheader("All Tickets")
@@ -132,7 +133,8 @@ with tab_add:
             cur = pd.concat([cur, pd.DataFrame([row])], ignore_index=True)
             cur.to_csv(SEED_FILE, index=False)
             st.success("Ticket created.")
-            st.experimental_rerun()
+            st.session_state["edited_ticket"] = ticket
+    st.success("✅ Ticket updated successfully!")
 
 with tab_edit:
     st.subheader("Edit Ticket")
@@ -160,7 +162,8 @@ with tab_edit:
                 df.loc[ix, "LastUpdated"] = pd.Timestamp.now()
                 df.to_csv(SEED_FILE, index=False)
             st.success("Saved.")
-            st.experimental_rerun()
+            st.session_state["edited_ticket"] = ticket
+    st.success("✅ Ticket updated successfully!")
 
 with tab_kpi:
     st.subheader("KPI Dashboard")
