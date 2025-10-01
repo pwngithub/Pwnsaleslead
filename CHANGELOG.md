@@ -1,5 +1,11 @@
 # Changelog
 
+## v19_10_32
+### Bug Fixes
+- Fixed NameError bug when editing or adding tickets (safe session_state handling)
+
+
+
 ## v19_10_31
 ### Bug Fixes
 - Replaced st.experimental_rerun with session_state logic for better UX when editing tickets
