@@ -1,43 +1,20 @@
-# Pioneer Sales Lead App – v19.10.26
+<p align="left">
+  <img src="https://images.squarespace-cdn.com/content/v1/651eb4433b13e72c1034f375/369c5df0-5363-4827-b041-1add0367f447/PBB+long+logo.png?format=1500w" alt="Pioneer Broadband Logo" width="360"/>
+</p>
 
-This is a **minimal demo build** of the Pioneer Sales Lead App.  
-It includes a **CSV seed file** with 20 realistic tickets and auto-load support.  
+# Pioneer Sales Lead App – v19.10.27
 
----
+- **Pipeline View (default)**: drag-and-drop, color-coded, counts, summary bar
+- **All Tickets**: searchable & filterable table
+- **Add / Edit Tickets**: update status, notes, lost reason, service
+- **KPI Dashboard**: summary KPIs & breakdowns
+- **Audit Log**: actions recorded locally
+- **CSV Auto-load** (this zip includes `saleslead_seed.csv`). App falls back to JotForm API if CSV not present.
 
-## 🚀 Features
-- Automatically loads `saleslead_seed.csv` on startup.  
-- If the seed file is missing, the app falls back to the **JotForm API**.  
-- Displays all tickets in a clean **preview table**.  
-- Ready for expansion with **Add Ticket, Edit Ticket, KPI** tabs.  
+**Footer:** _Powered by Pioneer Broadband | Internal Use Only_
 
----
-
-## 📂 File Structure
+## Run
+```bash
+pip install -r requirements.txt
+streamlit run app.py
 ```
-pwnsaleslead_v19_10_26.zip
-├── app.py                # Streamlit app
-├── saleslead_seed.csv    # 20 realistic seed tickets
-├── README.md             # Instructions
-```
-
----
-
-## ▶️ How to Run
-1. Unzip the package.  
-2. Install requirements (you need Python 3.9+):  
-   ```bash
-   pip install streamlit pandas
-   ```
-3. Run the app:  
-   ```bash
-   streamlit run app.py
-   ```
-
----
-
-## 📝 Usage Notes
-- On startup, the app checks for `saleslead_seed.csv`.  
-  - If found → loads tickets from the CSV (demo mode).  
-  - If not → falls back to fetching tickets from JotForm API.  
-- To reset data, simply replace or delete `saleslead_seed.csv`.  

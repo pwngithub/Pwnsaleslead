@@ -1,6 +1,5 @@
 streamlit
 pandas
 requests
-plotly
-openpyxl
 streamlit-sortables
+Pillow
