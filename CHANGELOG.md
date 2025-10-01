@@ -1,5 +1,11 @@
 # Changelog
 
+## v19_10_33
+### Bug Fixes
+- Fixed indentation bug in ticket editing (safe session_state handling now works)
+
+
+
 ## v19_10_32
 ### Bug Fixes
 - Fixed NameError bug when editing or adding tickets (safe session_state handling)
