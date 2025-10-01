@@ -50,7 +50,7 @@ if 'df' not in st.session_state:
         st.session_state.df = pd.DataFrame(columns=["SubmissionID","Name","ContactSource","Status","TypeOfService","LostReason","Notes","CreatedAt","LastUpdated"])
         st.caption("ℹ️ No local CSV found — JotForm fallback not enabled in this build")
 
-# Create a local reference for convenience
+# Create a local reference to the session state DataFrame for cleaner code
 df = st.session_state.df
 
 # Tabs
@@ -78,6 +78,7 @@ with tab_pipe:
                 else:
                     for _, row in subset.sort_values("LastUpdated", ascending=False).iterrows():
                         with st.expander(f"{row['Name']} · {row.get('TypeOfService','')}"):
+                            # Use strftime for cleaner timestamp display
                             st.caption(f"Updated: {row['LastUpdated'].strftime('%Y-%m-%d %H:%M')}")
                             st.write(row.get("Notes",""))
                             
@@ -85,14 +86,14 @@ with tab_pipe:
                             move_to = st.selectbox("Move to", STATUS_LIST, index=STATUS_LIST.index(status), key=f"mv_{row['SubmissionID']}")
                             
                             if move_to != status:
-                                # Update st.session_state.df and save
+                                # Update session state DataFrame and save
                                 ix = st.session_state.df.index[st.session_state.df["SubmissionID"]==row["SubmissionID"]]
                                 if len(ix):
                                     st.session_state.df.loc[ix, "Status"] = move_to
                                     st.session_state.df.loc[ix, "LastUpdated"] = pd.Timestamp.now()
                                     st.session_state.df.to_csv(SEED_FILE, index=False)
                                     st.success(f"Moved to {move_to}")
-                                    st.experimental_rerun() # Line 135 fix is here
+                                    st.experimental_rerun()
 
 with tab_all:
     st.subheader("All Tickets")
@@ -101,6 +102,7 @@ with tab_all:
     src = c1.selectbox("Source", ["All","Email","Phone Call","Walk In","Social Media","In Person"])
     stt = c2.selectbox("Status", ["All"]+STATUS_LIST)
     svc = c3.selectbox("Service", ["All"]+SERVICE_TYPES)
+    # Ensure LostReason column exists before trying to access unique values
     lost_opts = ["All"] + sorted([x for x in df["LostReason"].dropna().unique()]) if "LostReason" in df.columns else ["All"]
     los = c4.selectbox("Lost Reason", lost_opts)
     v = df.copy()
@@ -145,8 +147,12 @@ with tab_add:
             }
             
             # FIX: Use st.session_state.df for the update logic
-            temp_df = pd.concat([st.session_state.df, pd.DataFrame([row])], ignore_index=True)
-            st.session_state.df = temp_df # Update the session state
+            # Ensure all required columns are present before concat
+            # This is safer than reading the CSV again
+            current_df = st.session_state.df
+            new_row_df = pd.DataFrame([row], columns=current_df.columns)
+            
+            st.session_state.df = pd.concat([current_df, new_row_df], ignore_index=True)
             st.session_state.df.to_csv(SEED_FILE, index=False) # Save to file
             
             st.success("Ticket created.")
@@ -158,7 +164,8 @@ with tab_edit:
         st.info("No tickets to edit.")
     else:
         opts = {r["Name"]: r["SubmissionID"] for _, r in df.iterrows()}
-        # Handle case where the list of names is empty
+        
+        # Guard clause for empty options
         if not opts:
             st.info("No selectable tickets.")
         else:
@@ -167,8 +174,10 @@ with tab_edit:
             row = df[df["SubmissionID"]==sid].iloc[0]
             c1,c2 = st.columns(2)
             with c1:
-                new_status = st.selectbox("Status", STATUS_LIST, index=STATUS_LIST.index(row["Status"]) if row["Status"] in STATUS_LIST else 0)
-                new_service = st.selectbox("Type of Service", SERVICE_TYPES, index=SERVICE_TYPES.index(row["TypeOfService"]) if row["TypeOfService"] in SERVICE_TYPES else 0)
+                new_status = st.selectbox("Status", STATUS_LIST, 
+                                          index=STATUS_LIST.index(row["Status"]) if row["Status"] in STATUS_LIST else 0)
+                new_service = st.selectbox("Type of Service", SERVICE_TYPES, 
+                                           index=SERVICE_TYPES.index(row["TypeOfService"]) if row["TypeOfService"] in SERVICE_TYPES else 0)
             with c2:
                 # Use .get() and an empty string fallback for safety
                 new_lost = st.text_input("Lost Reason", value=row.get("LostReason") or "")
@@ -177,15 +186,19 @@ with tab_edit:
             if st.button("Save Changes"):
                 # FIX: Use st.session_state.df for the update logic
                 ix = st.session_state.df.index[st.session_state.df["SubmissionID"]==sid]
+                
                 if len(ix):
                     st.session_state.df.loc[ix, "Status"] = new_status
                     st.session_state.df.loc[ix, "TypeOfService"] = new_service
                     st.session_state.df.loc[ix, "LostReason"] = new_lost if new_lost else None
                     st.session_state.df.loc[ix, "Notes"] = new_notes
                     st.session_state.df.loc[ix, "LastUpdated"] = pd.Timestamp.now()
-                    st.session_state.df.to_csv(SEED_FILE, index=False) # Save to file
+                    
+                    # Save the modified session state DataFrame to the persistent file
+                    st.session_state.df.to_csv(SEED_FILE, index=False)
+                    
                 st.success("Saved.")
-                st.experimental_rerun()
+                st.experimental_rerun() # Line ~188 fix
 
 with tab_kpi:
     st.subheader("KPI Dashboard")
