@@ -1,35 +1,43 @@
-<p align="center">
-  <img src="https://images.squarespace-cdn.com/content/v1/651eb4433b13e72c1034f375/369c5df0-5363-4827-b041-1add0367f447/PBB+long+logo.png?format=1500w" alt="Pioneer Broadband Logo" width="400"/>
-</p>
+# Pioneer Sales Lead App – v19.10.26
 
-# Sales Lead Tracker – v19.10.25
+This is a **minimal demo build** of the Pioneer Sales Lead App.  
+It includes a **CSV seed file** with 20 realistic tickets and auto-load support.  
 
-As of **v19.10.25**, **Pipeline View** (drag-and-drop Kanban) is the **default tab** when you open the app.  
-The **All Tickets** tab remains available for list/grid management.
+---
 
-## Tabs
-- **🧩 Pipeline View** (default): drag-and-drop Kanban by status; updates JotForm and auto-stamps status dates.
-- **📋 All Tickets**: table view with filters, search, inline edit/delete.
-- **➕ Add Ticket**: add new leads.
-- **📈 KPI Dashboard**: charts and conversion metrics.
-- **🧾 Audit Log**: shows actions and bulk delete TEST tickets.
+## 🚀 Features
+- Automatically loads `saleslead_seed.csv` on startup.  
+- If the seed file is missing, the app falls back to the **JotForm API**.  
+- Displays all tickets in a clean **preview table**.  
+- Ready for expansion with **Add Ticket, Edit Ticket, KPI** tabs.  
 
-## Changing the Default Tab
-If you want **All Tickets** as the default again:
+---
 
-1. Open `app.py`.
-2. Find where the tabs are declared and move `"📋 All Tickets"` to the first position.
-3. Example:
-   ```python
-   tab_all, tab_pipe, tab_add, tab_kpi, tab_audit = st.tabs([...])
+## 📂 File Structure
+```
+pwnsaleslead_v19_10_26.zip
+├── app.py                # Streamlit app
+├── saleslead_seed.csv    # 20 realistic seed tickets
+├── README.md             # Instructions
+```
+
+---
+
+## ▶️ How to Run
+1. Unzip the package.  
+2. Install requirements (you need Python 3.9+):  
+   ```bash
+   pip install streamlit pandas
    ```
-4. Save and run:
+3. Run the app:  
    ```bash
    streamlit run app.py
    ```
 
-## Run
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
+---
+
+## 📝 Usage Notes
+- On startup, the app checks for `saleslead_seed.csv`.  
+  - If found → loads tickets from the CSV (demo mode).  
+  - If not → falls back to fetching tickets from JotForm API.  
+- To reset data, simply replace or delete `saleslead_seed.csv`.  
