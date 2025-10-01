@@ -2,26 +2,34 @@
   <img src="https://images.squarespace-cdn.com/content/v1/651eb4433b13e72c1034f375/369c5df0-5363-4827-b041-1add0367f447/PBB+long+logo.png?format=1500w" alt="Pioneer Broadband Logo" width="400"/>
 </p>
 
-# Sales Lead Tracker – v19.10.23
+# Sales Lead Tracker – v19.10.25
 
-Live JotForm-powered lead tracker for Pioneer Broadband.
+As of **v19.10.25**, **Pipeline View** (drag-and-drop Kanban) is the **default tab** when you open the app.  
+The **All Tickets** tab remains available for list/grid management.
 
-## Features
-- Top tabs: **All Tickets**, **Add Ticket**, **KPI Dashboard**, **Audit Log**
-- Live JotForm integration (Form ID 252598168633065)
-- One-time **auto-seed** of 15–20 `TEST – Pioneer Broadband` tickets on first run
-- Filters & search (persist across tabs); KPI is filter-aware
-- Inline **Edit** and **Delete** actions in All Tickets
-- **Bulk Delete TEST Tickets** button (conditional + confirmation)
-- **Audit Log** (`audit_log.csv`) grows indefinitely
-- Deprecation-safe rendering with `use_container_width` and Plotly `config={"responsive": True}`
+## Tabs
+- **🧩 Pipeline View** (default): drag-and-drop Kanban by status; updates JotForm and auto-stamps status dates.
+- **📋 All Tickets**: table view with filters, search, inline edit/delete.
+- **➕ Add Ticket**: add new leads.
+- **📈 KPI Dashboard**: charts and conversion metrics.
+- **🧾 Audit Log**: shows actions and bulk delete TEST tickets.
+
+## Changing the Default Tab
+If you want **All Tickets** as the default again:
+
+1. Open `app.py`.
+2. Find where the tabs are declared and move `"📋 All Tickets"` to the first position.
+3. Example:
+   ```python
+   tab_all, tab_pipe, tab_add, tab_kpi, tab_audit = st.tabs([...])
+   ```
+4. Save and run:
+   ```bash
+   streamlit run app.py
+   ```
 
 ## Run
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
-
----
-
-**Maintained by Pioneer Broadband – v19.10.23**

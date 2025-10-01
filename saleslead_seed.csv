@@ -1,0 +1,21 @@
+SubmissionID,Name,ContactSource,Status,TypeOfService,LostReason,Notes,Street,City,State,Postal,CreatedAt,LastUpdated
+seed_1,Sarah M.,Walk In,Waiting on Customer,Phone,Not interested,Auto-generated sample ticket for Sarah M.,225 Main St,Houlton,ME,04775,2025-09-12 03:51:38,2025-09-17 03:51:38
+seed_2,Daniel R.,Social Media,Waiting on Customer,Phone,Chose competitor,Auto-generated sample ticket for Daniel R.,322 Main St,Bangor,ME,04798,2025-09-26 03:51:38,2025-09-27 03:51:38
+seed_3,Maria L.,Email,Scheduled,Cell Phone,Too expensive,Auto-generated sample ticket for Maria L.,383 Main St,Presque Isle,ME,04774,2025-09-28 03:51:38,2025-10-01 03:51:38
+seed_4,Jason B.,Walk In,Installed,TV,Too expensive,Auto-generated sample ticket for Jason B.,453 Main St,Presque Isle,ME,04755,2025-09-04 03:51:38,2025-09-08 03:51:38
+seed_5,Emily K.,Email,Survey Completed,Internet and TV,Not interested,Auto-generated sample ticket for Emily K.,773 Main St,Houlton,ME,04786,2025-09-30 03:51:38,2025-10-03 03:51:38
+seed_6,Robert T.,In Person,Installed,Cell Phone,Too expensive,Auto-generated sample ticket for Robert T.,678 Main St,Calais,ME,04761,2025-09-03 03:51:38,2025-09-04 03:51:38
+seed_7,Olivia W.,Walk In,Survey Scheduled,Internet and Cell Phone,Chose competitor,Auto-generated sample ticket for Olivia W.,969 Main St,Presque Isle,ME,04754,2025-09-24 03:51:38,2025-09-25 03:51:38
+seed_8,James H.,Email,Survey Scheduled,TV,Too expensive,Auto-generated sample ticket for James H.,903 Main St,Bangor,ME,04745,2025-09-20 03:51:38,2025-09-20 03:51:38
+seed_9,Sophia A.,Walk In,Lost,TV,Too expensive,Auto-generated sample ticket for Sophia A.,562 Main St,Presque Isle,ME,04716,2025-09-28 03:51:38,2025-09-30 03:51:38
+seed_10,Michael D.,Walk In,Survey Completed,TV,Too expensive,Auto-generated sample ticket for Michael D.,130 Main St,Presque Isle,ME,04767,2025-09-08 03:51:38,2025-09-10 03:51:38
+seed_11,Isabella C.,Email,Waiting on Customer,Internet,Not interested,Auto-generated sample ticket for Isabella C.,869 Main St,Calais,ME,04729,2025-09-26 03:51:38,2025-09-29 03:51:38
+seed_12,Liam J.,Social Media,Survey Completed,Internet,,Auto-generated sample ticket for Liam J.,650 Main St,Houlton,ME,04725,2025-09-12 03:51:38,2025-09-15 03:51:38
+seed_13,Mason P.,Social Media,Survey Scheduled,Internet and Phone,Chose competitor,Auto-generated sample ticket for Mason P.,138 Main St,Houlton,ME,04758,2025-09-07 03:51:38,2025-09-10 03:51:38
+seed_14,Ethan G.,Email,Lost,TV,Chose competitor,Auto-generated sample ticket for Ethan G.,746 Main St,Houlton,ME,04727,2025-09-12 03:51:38,2025-09-13 03:51:38
+seed_15,Ava B.,Walk In,Waiting on Customer,Internet,Too expensive,Auto-generated sample ticket for Ava B.,968 Main St,Calais,ME,04741,2025-09-29 03:51:38,2025-10-02 03:51:38
+seed_16,Charlotte S.,Email,Lost,Internet,Not interested,Auto-generated sample ticket for Charlotte S.,554 Main St,Presque Isle,ME,04734,2025-09-25 03:51:38,2025-09-27 03:51:38
+seed_17,Amelia V.,Phone Call,Waiting on Customer,Internet and Cell Phone,Coverage issue,Auto-generated sample ticket for Amelia V.,205 Main St,Houlton,ME,04722,2025-09-07 03:51:38,2025-09-07 03:51:38
+seed_18,Benjamin F.,Social Media,Survey Scheduled,Internet and TV,,Auto-generated sample ticket for Benjamin F.,421 Main St,Houlton,ME,04798,2025-09-29 03:51:38,2025-10-04 03:51:38
+seed_19,Lucas N.,In Person,Survey Completed,Internet,Coverage issue,Auto-generated sample ticket for Lucas N.,813 Main St,Presque Isle,ME,04741,2025-09-20 03:51:38,2025-09-25 03:51:38
+seed_20,Henry O.,Walk In,Scheduled,TV,Not interested,Auto-generated sample ticket for Henry O.,869 Main St,Presque Isle,ME,04744,2025-09-24 03:51:38,2025-09-27 03:51:38
