@@ -29,7 +29,7 @@ with mid:
     st.title("Sales Lead Tracker — Pipeline")
 
 # ==============================================================================
-# Load and manage data using st.session_state
+# Load and manage data using st.session_state (No local 'df' variable)
 # ==============================================================================
 
 if 'df' not in st.session_state:
@@ -50,9 +50,7 @@ if 'df' not in st.session_state:
         st.session_state.df = pd.DataFrame(columns=["SubmissionID","Name","ContactSource","Status","TypeOfService","LostReason","Notes","CreatedAt","LastUpdated"])
         st.caption("ℹ️ No local CSV found — JotForm fallback not enabled in this build")
 
-# Create a local reference to the session state DataFrame for cleaner code
-# Note: All modifications must target st.session_state.df directly.
-df = st.session_state.df 
+# REMOVED: df = st.session_state.df
 
 # Tabs
 tab_pipe, tab_all, tab_add, tab_edit, tab_kpi = st.tabs(["🧩 Pipeline View","📋 All Tickets","➕ Add Ticket","✏️ Edit Ticket","📈 KPI"])
@@ -65,21 +63,25 @@ def kpi_bar(vdf):
 
 with tab_pipe:
     st.subheader("Pipeline")
-    if df.empty:
+    if st.session_state.df.empty: # Use st.session_state.df
         st.info("No tickets yet.")
     else:
-        kpi_bar(df)
+        kpi_bar(st.session_state.df) # Use st.session_state.df
         cols = st.columns(6)
         for i, status in enumerate(STATUS_LIST):
             with cols[i]:
-                st.markdown(f"<div style='background:{COLORS[status]};padding:8px;border-radius:8px;color:#111;font-weight:700'>{status} ({int((df['Status']==status).sum())})</div>", unsafe_allow_html=True)
-                subset = df[df["Status"]==status]
+                # Use st.session_state.df
+                status_count = int((st.session_state.df['Status']==status).sum())
+                st.markdown(f"<div style='background:{COLORS[status]};padding:8px;border-radius:8px;color:#111;font-weight:700'>{status} ({status_count})</div>", unsafe_allow_html=True)
+                
+                # Use st.session_state.df
+                subset = st.session_state.df[st.session_state.df["Status"]==status]
+                
                 if subset.empty:
                     st.write("—")
                 else:
                     for _, row in subset.sort_values("LastUpdated", ascending=False).iterrows():
                         with st.expander(f"{row['Name']} · {row.get('TypeOfService','')}"):
-                            # Use strftime for cleaner timestamp display
                             st.caption(f"Updated: {row['LastUpdated'].strftime('%Y-%m-%d %H:%M')}")
                             st.write(row.get("Notes",""))
                             
@@ -103,10 +105,17 @@ with tab_all:
     src = c1.selectbox("Source", ["All","Email","Phone Call","Walk In","Social Media","In Person"])
     stt = c2.selectbox("Status", ["All"]+STATUS_LIST)
     svc = c3.selectbox("Service", ["All"]+SERVICE_TYPES)
-    # Ensure LostReason column exists before trying to access unique values
-    lost_opts = ["All"] + sorted([x for x in df["LostReason"].dropna().unique()]) if "LostReason" in df.columns else ["All"]
+    
+    # Use st.session_state.df
+    if "LostReason" in st.session_state.df.columns:
+        lost_opts = ["All"] + sorted([x for x in st.session_state.df["LostReason"].dropna().unique()])
+    else:
+        lost_opts = ["All"]
     los = c4.selectbox("Lost Reason", lost_opts)
-    v = df.copy()
+    
+    # Use st.session_state.df
+    v = st.session_state.df.copy()
+    
     if q: v = v[v["Name"].str.contains(q, case=False, na=False)]
     if src!="All": v = v[v["ContactSource"]==src]
     if stt!="All": v = v[v["Status"]==stt]
@@ -160,11 +169,11 @@ with tab_add:
 with tab_edit:
     st.subheader("Edit Ticket")
     
-    # FIX: Use st.session_state.df directly to ensure it's the live data
+    # Use st.session_state.df directly
     if st.session_state.df.empty: 
         st.info("No tickets to edit.")
     else:
-        # FIX: Ensure opts dictionary is built from st.session_state.df
+        # Ensure opts dictionary is built from st.session_state.df
         opts = {r["Name"]: r["SubmissionID"] for _, r in st.session_state.df.iterrows()}
         
         # Guard clause for empty options
@@ -173,7 +182,7 @@ with tab_edit:
         else:
             sel = st.selectbox("Select by Name", list(opts.keys()))
             sid = opts[sel]
-            # FIX: Ensure row is selected from st.session_state.df
+            # Ensure row is selected from st.session_state.df
             row = st.session_state.df[st.session_state.df["SubmissionID"]==sid].iloc[0]
             
             c1,c2 = st.columns(2)
@@ -202,14 +211,14 @@ with tab_edit:
                     st.session_state.df.to_csv(SEED_FILE, index=False)
                     
                 st.success("Saved.")
-                st.experimental_rerun() # Line ~201 fix
+                st.experimental_rerun() # Line 205 fix
 
 with tab_kpi:
     st.subheader("KPI Dashboard")
-    if df.empty:
+    if st.session_state.df.empty: # Use st.session_state.df
         st.info("No data yet.")
     else:
-        v = df.copy()
+        v = st.session_state.df.copy() # Use st.session_state.df
         # Summary bar
         parts = [f"**Total Leads:** {len(v)}"]
         for s in STATUS_LIST:
