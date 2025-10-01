@@ -1,10 +1,7 @@
 
-# Pioneer Sales Lead App – v19.10.28
+# Pioneer Sales Lead App – v19.10.29
 import streamlit as st
 import pandas as pd
-import requests
-from datetime import datetime
-import os, csv
 from streamlit_sortables import sort_items
 
 st.set_page_config(page_title="Pioneer Sales Lead App", page_icon="📶", layout="wide")
@@ -19,6 +16,8 @@ COLORS = {
     "Lost": "#ef4444"
 }
 
+df = pd.read_csv("saleslead_seed.csv")
+
 def build_groups(src_df):
     groups = {s: [] for s in STATUS_LIST}
     for _, r in src_df.iterrows():
@@ -27,21 +26,24 @@ def build_groups(src_df):
         groups[s].append(label)
     return groups
 
-# Pipeline tab (snippet with fix)
-df = pd.read_csv("saleslead_seed.csv")
 groups = build_groups(df)
+
 container_names = []
 mapped_groups = {}
+styles = []
 for s in STATUS_LIST:
     header = f"{s} ({len(groups.get(s, []))})"
     container_names.append(header)
     mapped_groups[header] = groups.get(s, [])
+    styles.append({"background": COLORS[s], "color":"#111"})
 
 updated = sort_items(
     items=mapped_groups,
     multi_containers=True,
     direction="horizontal",
     container_names=container_names,
-    container_styles=[{"background": COLORS[s], "color":"#111"} for s in STATUS_LIST],
+    container_styles=styles,
     style={"height":"560px"},
 )
+
+st.write(updated)
