@@ -1,4 +1,5 @@
-# Pioneer Sales Lead App – v19.10.29
+# Pioneer Sales Lead App – v19.10.30
 
-- Pipeline container alignment fixed (no TypeError)
-- Fresh seed & cleared audit log
+- Reliable Pipeline (quick-move controls; no drag library errors)
+- All Tickets, Add Ticket, Edit Ticket, KPI Dashboard
+- CSV-first loading (seed included), JotForm not enabled in this minimal build

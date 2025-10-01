@@ -1,21 +1,21 @@
 SubmissionID,Name,ContactSource,Status,TypeOfService,LostReason,Notes,Street,City,State,Postal,CreatedAt,LastUpdated
-seed_1,Sarah Mitchell,Phone Call,Survey Scheduled,TV,,Auto-generated sample ticket for Sarah Mitchell.,502 Main St,Houlton,ME,04727,2025-09-01 10:24:41,2025-09-27 10:24:41
-seed_2,Daniel Roberts,Social Media,Survey Scheduled,Internet and Phone,,Auto-generated sample ticket for Daniel Roberts.,950 Main St,Houlton,ME,04739,2025-09-11 10:24:41,2025-09-28 10:24:41
-seed_3,Maria Lopez,In Person,Survey Scheduled,Phone,,Auto-generated sample ticket for Maria Lopez.,679 Main St,Calais,ME,04741,2025-09-08 10:24:41,2025-09-16 10:24:41
-seed_4,Jason Brooks,In Person,Survey Completed,Internet,,Auto-generated sample ticket for Jason Brooks.,807 Main St,Presque Isle,ME,04747,2025-09-07 10:24:41,2025-09-24 10:24:41
-seed_5,Emily Kim,Walk In,Survey Completed,Cell Phone,,Auto-generated sample ticket for Emily Kim.,250 Main St,Fort Kent,ME,04722,2025-09-09 10:24:41,2025-09-19 10:24:41
-seed_6,Robert Turner,Social Media,Survey Completed,Internet,,Auto-generated sample ticket for Robert Turner.,822 Main St,Madawaska,ME,04742,2025-09-11 10:24:41,2025-09-30 10:24:41
-seed_7,Olivia White,Email,Scheduled,Cell Phone,,Auto-generated sample ticket for Olivia White.,527 Main St,Caribou,ME,04793,2025-09-03 10:24:41,2025-09-25 10:24:41
-seed_8,James Harris,In Person,Scheduled,Phone,,Auto-generated sample ticket for James Harris.,331 Main St,Calais,ME,04757,2025-09-18 10:24:41,2025-09-20 10:24:41
-seed_9,Sophia Allen,Phone Call,Scheduled,Internet and Cell Phone,,Auto-generated sample ticket for Sophia Allen.,331 Main St,Madawaska,ME,04796,2025-09-15 10:24:41,2025-09-25 10:24:41
-seed_10,Michael Davis,Phone Call,Installed,Phone,,Auto-generated sample ticket for Michael Davis.,628 Main St,Presque Isle,ME,04786,2025-09-29 10:24:41,2025-09-30 10:24:41
-seed_11,Isabella Carter,Phone Call,Installed,Internet,,Auto-generated sample ticket for Isabella Carter.,860 Main St,Caribou,ME,04782,2025-09-30 10:24:41,2025-09-30 10:24:41
-seed_12,Liam Johnson,Email,Installed,Internet and TV,,Auto-generated sample ticket for Liam Johnson.,623 Main St,Fort Kent,ME,04725,2025-09-17 10:24:41,2025-09-20 10:24:41
-seed_13,Mason Price,In Person,Installed,Internet and TV,,Auto-generated sample ticket for Mason Price.,600 Main St,Caribou,ME,04713,2025-09-29 10:24:41,2025-09-30 10:24:41
-seed_14,Ethan Grant,Phone Call,Waiting on Customer,TV,,Auto-generated sample ticket for Ethan Grant.,948 Main St,Fort Kent,ME,04783,2025-09-13 10:24:41,2025-09-15 10:24:41
-seed_15,Ava Bennett,In Person,Waiting on Customer,Cell Phone,,Auto-generated sample ticket for Ava Bennett.,427 Main St,Houlton,ME,04771,2025-09-02 10:24:41,2025-09-22 10:24:41
-seed_16,Charlotte Scott,Social Media,Waiting on Customer,Internet and Cell Phone,,Auto-generated sample ticket for Charlotte Scott.,558 Main St,Presque Isle,ME,04753,2025-09-12 10:24:41,2025-09-22 10:24:41
-seed_17,Amelia Vaughn,Walk In,Lost,Internet and TV,Coverage issue,Auto-generated sample ticket for Amelia Vaughn.,564 Main St,Bangor,ME,04736,2025-09-09 10:24:41,2025-09-22 10:24:41
-seed_18,Benjamin Fisher,In Person,Lost,Internet and Phone,Chose competitor,Auto-generated sample ticket for Benjamin Fisher.,319 Main St,Madawaska,ME,04710,2025-09-22 10:24:41,2025-09-24 10:24:41
-seed_19,Lucas Nguyen,Walk In,Lost,Internet and Cell Phone,Too expensive,Auto-generated sample ticket for Lucas Nguyen.,197 Main St,Fort Kent,ME,04784,2025-09-18 10:24:41,2025-09-22 10:24:41
-seed_20,Henry Owens,Phone Call,Lost,Phone,Coverage issue,Auto-generated sample ticket for Henry Owens.,291 Main St,Fort Kent,ME,04751,2025-09-14 10:24:41,2025-09-18 10:24:41
+seed_1,Sarah Mitchell,Email,Survey Scheduled,Internet and Cell Phone,,Auto-generated ticket for Sarah Mitchell.,690 Main St,Eastport,ME,04779,2025-09-15 10:31:51,2025-09-16 10:31:51
+seed_2,Daniel Roberts,In Person,Survey Scheduled,Internet and TV,,Auto-generated ticket for Daniel Roberts.,589 Main St,Presque Isle,ME,04764,2025-09-04 10:31:51,2025-09-20 10:31:51
+seed_3,Maria Lopez,In Person,Survey Scheduled,Cell Phone,,Auto-generated ticket for Maria Lopez.,821 Main St,Fort Kent,ME,04773,2025-09-10 10:31:51,2025-09-27 10:31:51
+seed_4,Jason Brooks,Phone Call,Survey Completed,Internet and Cell Phone,,Auto-generated ticket for Jason Brooks.,627 Main St,Presque Isle,ME,04735,2025-09-23 10:31:51,2025-09-28 10:31:51
+seed_5,Emily Kim,Email,Survey Completed,Internet and Cell Phone,,Auto-generated ticket for Emily Kim.,478 Main St,Eastport,ME,04746,2025-09-01 10:31:51,2025-09-26 10:31:51
+seed_6,Robert Turner,Email,Survey Completed,TV,,Auto-generated ticket for Robert Turner.,694 Main St,Houlton,ME,04784,2025-09-12 10:31:51,2025-09-30 10:31:51
+seed_7,Olivia White,Walk In,Scheduled,Cell Phone,,Auto-generated ticket for Olivia White.,488 Main St,Fort Kent,ME,04789,2025-09-08 10:31:51,2025-09-09 10:31:51
+seed_8,James Harris,Walk In,Scheduled,Internet,,Auto-generated ticket for James Harris.,132 Main St,Calais,ME,04757,2025-09-26 10:31:51,2025-09-29 10:31:51
+seed_9,Sophia Allen,In Person,Scheduled,Internet and TV,,Auto-generated ticket for Sophia Allen.,138 Main St,Fort Kent,ME,04779,2025-09-19 10:31:51,2025-09-30 10:31:51
+seed_10,Michael Davis,Social Media,Installed,TV,,Auto-generated ticket for Michael Davis.,685 Main St,Eastport,ME,04778,2025-09-23 10:31:51,2025-09-23 10:31:51
+seed_11,Isabella Carter,Social Media,Installed,Internet and Cell Phone,,Auto-generated ticket for Isabella Carter.,558 Main St,Madawaska,ME,04756,2025-09-14 10:31:51,2025-09-15 10:31:51
+seed_12,Liam Johnson,Email,Installed,Phone,,Auto-generated ticket for Liam Johnson.,190 Main St,Fort Kent,ME,04741,2025-09-30 10:31:51,2025-09-30 10:31:51
+seed_13,Mason Price,Email,Installed,Cell Phone,,Auto-generated ticket for Mason Price.,431 Main St,Houlton,ME,04711,2025-09-29 10:31:51,2025-09-30 10:31:51
+seed_14,Ethan Grant,Walk In,Waiting on Customer,Phone,,Auto-generated ticket for Ethan Grant.,737 Main St,Houlton,ME,04761,2025-09-06 10:31:51,2025-09-23 10:31:51
+seed_15,Ava Bennett,Social Media,Waiting on Customer,Internet and Phone,,Auto-generated ticket for Ava Bennett.,747 Main St,Houlton,ME,04715,2025-09-27 10:31:51,2025-09-28 10:31:51
+seed_16,Charlotte Scott,Phone Call,Waiting on Customer,Internet,,Auto-generated ticket for Charlotte Scott.,625 Main St,Calais,ME,04735,2025-09-14 10:31:51,2025-09-25 10:31:51
+seed_17,Amelia Vaughn,Email,Lost,TV,Coverage issue,Auto-generated ticket for Amelia Vaughn.,457 Main St,Presque Isle,ME,04712,2025-09-12 10:31:51,2025-09-13 10:31:51
+seed_18,Benjamin Fisher,Email,Lost,Cell Phone,Too expensive,Auto-generated ticket for Benjamin Fisher.,773 Main St,Houlton,ME,04777,2025-09-07 10:31:51,2025-09-09 10:31:51
+seed_19,Lucas Nguyen,Phone Call,Lost,TV,,Auto-generated ticket for Lucas Nguyen.,695 Main St,Madawaska,ME,04744,2025-09-14 10:31:51,2025-09-27 10:31:51
+seed_20,Henry Owens,In Person,Lost,TV,Not interested,Auto-generated ticket for Henry Owens.,784 Main St,Fort Kent,ME,04770,2025-09-07 10:31:51,2025-09-24 10:31:51
