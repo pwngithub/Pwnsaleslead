@@ -5,6 +5,7 @@ import pandas as pd
 from datetime import datetime
 import requests
 import config # Import the config file
+import re
 
 # --- CONSTANTS ---
 st.set_page_config(page_title="Pioneer Sales Lead App", page_icon="📶", layout="wide")
@@ -55,10 +56,16 @@ def get_jotform_submissions():
                         return ans_dict.get('answer', '')
                     return ''
 
-                # --- THIS IS THE CORRECTED NAME LOGIC ---
-                name_ans = get_ans(config.FIELD_ID['name'])
-                first_name = name_ans.get('first', '') if isinstance(name_ans, dict) else ''
-                last_name = name_ans.get('last', '') if isinstance(name_ans, dict) else ''
+                # --- NEW, ROBUST NAME PARSING LOGIC ---
+                # It extracts the numeric ID (e.g., '3') from "first_3"
+                name_field_str = config.FIELD_ID.get('name_first', '')
+                name_id_match = re.search(r'\d+', name_field_str)
+                first_name, last_name = '', ''
+                if name_id_match:
+                    name_id = name_id_match.group()
+                    name_ans = get_ans(name_id)
+                    first_name = name_ans.get('first', '') if isinstance(name_ans, dict) else ''
+                    last_name = name_ans.get('last', '') if isinstance(name_ans, dict) else ''
 
                 records.append({
                     "SubmissionID": sub.get('id'),
@@ -288,28 +295,34 @@ def main_app():
                 if miss:
                     st.error("Missing: " + ", ".join(miss))
                 else:
-                    # NOTE: Here we are using the numeric ID for the name field
-                    payload = {
-                        f'submission[{config.FIELD_ID["name"]}][first]': first,
-                        f'submission[{config.FIELD_ID["name"]}][last]': last,
-                        f'submission[{str(config.FIELD_ID["source"])}]': source,
-                        f'submission[{str(config.FIELD_ID["status"])}]': status,
-                        f'submission[{str(config.FIELD_ID["service_type"])}]': service,
-                        f'submission[{str(config.FIELD_ID["notes"])}]': notes,
-                        f'submission[{str(config.FIELD_ID["lost_reason"])}]': lost,
-                    }
-                    
-                    # Auto-stamp date if applicable on creation
-                    if status in STATUS_TO_DATE_FIELD:
-                        date_field_key = STATUS_TO_DATE_FIELD[status]
-                        date_field_id = config.FIELD_ID[date_field_key]
-                        payload[f'submission[{date_field_id}][month]'] = datetime.now().month
-                        payload[f'submission[{date_field_id}][day]'] = datetime.now().day
-                        payload[f'submission[{date_field_id}][year]'] = datetime.now().year
-                    
-                    if add_jotform_submission(payload):
-                        st.success("Ticket created successfully.")
-                        refresh_data()
+                    # --- NEW, ROBUST PAYLOAD CREATION FOR NAME ---
+                    name_field_str = config.FIELD_ID.get('name_first', '')
+                    name_id_match = re.search(r'\d+', name_field_str)
+                    if name_id_match:
+                        name_id = name_id_match.group()
+                        payload = {
+                            f'submission[{name_id}][first]': first,
+                            f'submission[{name_id}][last]': last,
+                            f'submission[{str(config.FIELD_ID["source"])}]': source,
+                            f'submission[{str(config.FIELD_ID["status"])}]': status,
+                            f'submission[{str(config.FIELD_ID["service_type"])}]': service,
+                            f'submission[{str(config.FIELD_ID["notes"])}]': notes,
+                            f'submission[{str(config.FIELD_ID["lost_reason"])}]': lost,
+                        }
+                        
+                        # Auto-stamp date if applicable on creation
+                        if status in STATUS_TO_DATE_FIELD:
+                            date_field_key = STATUS_TO_DATE_FIELD[status]
+                            date_field_id = config.FIELD_ID[date_field_key]
+                            payload[f'submission[{date_field_id}][month]'] = datetime.now().month
+                            payload[f'submission[{date_field_id}][day]'] = datetime.now().day
+                            payload[f'submission[{date_field_id}][year]'] = datetime.now().year
+                        
+                        if add_jotform_submission(payload):
+                            st.success("Ticket created successfully.")
+                            refresh_data()
+                    else:
+                        st.error("Could not determine Name Field ID from config.py.")
 
     with tab_edit:
         st.subheader("Edit Ticket")
