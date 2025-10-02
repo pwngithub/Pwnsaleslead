@@ -79,7 +79,6 @@ def get_jotform_submissions():
                     "TypeOfService": get_ans(config.FIELD_ID['service_type']),
                     "LostReason": get_ans(config.FIELD_ID['lost_reason']),
                     "Notes": get_ans(config.FIELD_ID['notes']),
-                    # FIX: Ensure all datetimes are timezone-aware (UTC) upon creation
                     "CreatedAt": pd.to_datetime(sub.get('created_at'), utc=True),
                     "LastUpdated": pd.to_datetime(sub.get('updated_at'), utc=True) if sub.get('updated_at') else pd.to_datetime(sub.get('created_at'), utc=True),
                     "SurveyScheduledDate": get_date_ans(config.FIELD_ID['survey_scheduled_date']),
@@ -145,24 +144,19 @@ def calculate_status_durations(df):
         
         events = []
         for ts_str, status in history:
-            # FIX: Ensure timestamps parsed from notes are treated as UTC
             events.append({'timestamp': pd.to_datetime(ts_str, utc=True), 'status': status})
         
         events.sort(key=lambda x: x['timestamp'])
 
-        # The 'CreatedAt' timestamp is now guaranteed to be UTC from get_jotform_submissions
         first_event_timestamp = row['CreatedAt']
         
-        # Determine the status at the time of creation
         initial_status = events[0]['status'] if events else row['Status']
         events.insert(0, {'timestamp': first_event_timestamp, 'status': initial_status})
         
-        # Calculate duration between events
         for i in range(len(events)):
             start_time = events[i]['timestamp']
             end_time = events[i+1]['timestamp'] if i + 1 < len(events) else now
             
-            # This calculation is now safe because all datetimes are timezone-aware
             duration = (end_time - start_time).total_seconds() / (3600 * 24)
             
             duration_records.append({
@@ -182,7 +176,6 @@ def update_ticket_status(submission_id, widget_key):
     if old_status != new_status:
         payload = {}
         payload[f'submission[{config.FIELD_ID["status"]}]'] = new_status
-        # FIX: Generate new timestamps in UTC
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
         history_note = f"[{timestamp}] Status → {new_status}"
         current_notes = row.get('Notes', '')
@@ -191,7 +184,6 @@ def update_ticket_status(submission_id, widget_key):
         if new_status in STATUS_TO_DATE_FIELD:
             date_field_key = STATUS_TO_DATE_FIELD[new_status]
             date_field_id = config.FIELD_ID[date_field_key]
-            # Jotform date fields don't have timezones, so local time is fine here
             now_local = datetime.now()
             payload[f'submission[{date_field_id}][month]'] = now_local.month
             payload[f'submission[{date_field_id}][day]'] = now_local.day
@@ -209,7 +201,6 @@ def update_ticket_details(sid, new_status, new_service, new_lost, new_notes):
     }
     if old_status != new_status:
         payload[f'submission[{config.FIELD_ID["status"]}]'] = new_status
-        # FIX: Generate new timestamps in UTC
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
         history_note = f"[{timestamp}] Status → {new_status}"
         new_notes_with_history = f"{history_note}\n{new_notes}".strip()
@@ -289,19 +280,26 @@ def main_app():
             if svc!="All": v = v[v["TypeOfService"]==svc]
             if los!="All": v = v[v["LostReason"]==los]
             st.dataframe(v[["SubmissionID","Name","ContactSource","Status","TypeOfService","LostReason","CreatedAt","LastUpdated"]], use_container_width=True)
+
+    # --- UPDATED "ADD TICKET" TAB WITH NEW TAB ORDER ---
     with tab_add:
         st.subheader("Add Ticket")
         with st.form("add"):
-            c1,c2 = st.columns(2)
-            with c1:
-                first = st.text_input("First Name *")
-                source = st.selectbox("Contact Source *", [""]+ ["Email","Phone Call","Walk In","Social Media","In Person"])
-                status = st.selectbox("Status *", [""]+STATUS_LIST)
-            with c2:
-                last = st.text_input("Last Name *")
-                service = st.selectbox("Type of Service *", [""]+SERVICE_TYPES)
-                notes = st.text_area("Notes")
+            c1, c2 = st.columns(2)
+            
+            # Declare elements in the desired tab order
+            first = c1.text_input("First Name *")
+            last = c2.text_input("Last Name *")
+            
+            source = c1.selectbox("Contact Source *", ["", "Email", "Phone Call", "Walk In", "Social Media", "In Person"])
+            service = c2.selectbox("Type of Service *", [""] + SERVICE_TYPES)
+            
+            status = c1.selectbox("Status *", [""] + STATUS_LIST)
+            notes = c2.text_area("Notes")
+
+            # This field is outside the main flow, so it comes last
             lost = st.text_input("Lost Reason")
+            
             if st.form_submit_button("Create Ticket"):
                 miss = [n for n,vv in [("First Name",first),("Last Name",last),("Source",source),("Status",status),("Service",service)] if not vv]
                 if miss:
@@ -329,6 +327,7 @@ def main_app():
                             refresh_data()
                     else:
                         st.error("Could not determine Name Field ID from config.py.")
+
     with tab_edit:
         st.subheader("Edit Ticket")
         if is_empty:
