@@ -124,7 +124,7 @@ def delete_jotform_submission(submission_id):
 def refresh_data():
     """Clear cache and rerun to fetch fresh data."""
     st.cache_data.clear()
-    st.experimental_rerun()
+    st.rerun() # <-- THE FIX IS HERE
 
 def update_ticket_status(submission_id, widget_key):
     """Updates status, adds history note, and auto-stamps date."""
