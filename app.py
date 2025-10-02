@@ -49,12 +49,7 @@ def initialize_data():
 # --- CALLBACK FUNCTIONS FOR WIDGETS ---
 
 def update_ticket_status(submission_id, widget_key):
-    """
-    FIX: Updates status using the widget's value from session state, then saves.
-    Accepts widget_key as an argument and reads st.session_state[widget_key] 
-    only when the callback runs.
-    """
-    # Retrieve the new status value from session state using the widget_key
+    """Updates status using the widget's value from session state, then saves."""
     new_status = st.session_state[widget_key]
     
     ix = st.session_state.df.index[st.session_state.df["SubmissionID"] == submission_id]
@@ -75,6 +70,16 @@ def update_ticket_details(sid, new_status, new_service, new_lost, new_notes):
         st.session_state.df.loc[ix, "LastUpdated"] = pd.Timestamp.now()
         st.session_state.df.to_csv(SEED_FILE, index=False)
         st.success(f"Ticket {sid} changes saved.")
+
+def delete_ticket(sid):
+    """Deletes a ticket from the DataFrame and saves the file."""
+    # Filter the DataFrame to keep everything *except* the selected SubmissionID
+    st.session_state.df = st.session_state.df[st.session_state.df["SubmissionID"] != sid]
+    
+    # Save the new, smaller DataFrame
+    st.session_state.df.to_csv(SEED_FILE, index=False)
+    
+    st.success(f"Ticket {sid} has been permanently deleted. Please refresh the page.")
 # ------------------------------------
 
 def main_app():
@@ -125,7 +130,6 @@ def main_app():
                                     index=STATUS_LIST.index(status), 
                                     key=widget_key, # Use the generated key
                                     on_change=update_ticket_status,
-                                    # FIX: Pass the submission_id and the widget_key itself to the args
                                     args=(row['SubmissionID'], widget_key) 
                                 )
 
@@ -194,7 +198,6 @@ def main_app():
                     st.session_state.df.to_csv(SEED_FILE, index=False)
                     
                     st.success("Ticket created. Refresh the page to see it in the Pipeline view.")
-                    # Removed st.experimental_rerun()
 
     with tab_edit:
         st.subheader("Edit Ticket")
@@ -223,15 +226,38 @@ def main_app():
                     new_lost = st.text_input("Lost Reason", value=row.get("LostReason") or "", key="edit_lost")
                     new_notes = st.text_area("Notes", value=row.get("Notes") or "", key="edit_notes")
                     
-                if st.button("Save Changes"):
-                    update_ticket_details(
-                        sid, 
-                        st.session_state.edit_status, 
-                        st.session_state.edit_service, 
-                        st.session_state.edit_lost, 
-                        st.session_state.edit_notes
-                    )
-                    st.info("Changes saved. Refresh the page to see them applied in the Pipeline view.")
+                # Row of buttons
+                col_save, col_delete = st.columns([1,1])
+
+                with col_save:
+                    if st.button("Save Changes", use_container_width=True):
+                        update_ticket_details(
+                            sid, 
+                            st.session_state.edit_status, 
+                            st.session_state.edit_service, 
+                            st.session_state.edit_lost, 
+                            st.session_state.edit_notes
+                        )
+                        st.info("Changes saved. Refresh the page to see them applied.")
+
+                with col_delete:
+                    # Added Delete Confirmation Logic
+                    if st.button("❌ Delete Ticket", type="primary", use_container_width=True):
+                        st.session_state['confirm_delete'] = sid
+                
+                # Confirmation Step
+                if st.session_state.get('confirm_delete') == sid:
+                    st.warning(f"Are you sure you want to delete ticket for {row['Name']} ({sid})?")
+                    c_yes, c_no = st.columns(2)
+                    with c_yes:
+                        # Call the delete function on confirmation
+                        if st.button("Yes, Delete Permanently", type="primary", use_container_width=True):
+                            delete_ticket(sid)
+                            st.session_state['confirm_delete'] = None # Clear confirmation
+                    with c_no:
+                        # Clear confirmation if canceled
+                        if st.button("No, Keep It", use_container_width=True):
+                            st.session_state['confirm_delete'] = None
 
 
     with tab_kpi:
@@ -261,4 +287,8 @@ def main_app():
 
 # Call the main function to run the app
 if __name__ == "__main__":
+    # Ensure the confirmation state exists
+    if 'confirm_delete' not in st.session_state:
+        st.session_state['confirm_delete'] = None
+        
     main_app()
