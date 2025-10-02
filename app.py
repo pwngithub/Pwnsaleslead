@@ -281,7 +281,6 @@ def main_app():
             if los!="All": v = v[v["LostReason"]==los]
             st.dataframe(v[["SubmissionID","Name","ContactSource","Status","TypeOfService","LostReason","CreatedAt","LastUpdated"]], use_container_width=True)
 
-    # --- UPDATED "ADD TICKET" TAB WITH NEW TAB ORDER ---
     with tab_add:
         st.subheader("Add Ticket")
         with st.form("add"):
