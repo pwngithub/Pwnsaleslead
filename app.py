@@ -11,8 +11,8 @@ st.set_page_config(page_title="Pioneer Sales Lead App", page_icon="📶", layout
 
 LOGO = "https://images.squarespace-cdn.com/content/v1/651eb4433b13e72c1034f375/369c5df0-5363-4827-b041-1add0367f447/PBB+long+logo.png?format=1500w"
 
-STATUS_LIST = ["Survey Scheduled", "Survey Completed", "Scheduled", "Installed", "Waiting on Customer", "Lost"]
-SERVICE_TYPES = ["Internet", "Phone", "TV", "Cell Phone", "Internet and Phone", "Internet and TV", "Internet and Cell Phone"]
+STATUS_LIST = config.STATUS_LIST
+SERVICE_TYPES = config.SERVICE_TYPES
 COLORS = {
     "Survey Scheduled": "#3b82f6",
     "Survey Completed": "#fbbf24",
@@ -250,7 +250,7 @@ def main_app():
         st.subheader("All Tickets")
         c0,c1,c2,c3,c4 = st.columns([2,1,1,1,1])
         q = c0.text_input("🔍 Search name")
-        src = c1.selectbox("Source", ["All","Email","Phone Call","Walk In","Social Media","In Person"])
+        src = c1.selectbox("Source", ["All"] + config.SERVICE_TYPES)
         stt = c2.selectbox("Status", ["All"]+STATUS_LIST)
         svc = c3.selectbox("Service", ["All"]+SERVICE_TYPES)
         lost_opts = ["All"] + sorted([x for x in st.session_state.df["LostReason"].dropna().unique()])
@@ -270,7 +270,7 @@ def main_app():
             c1,c2 = st.columns(2)
             with c1:
                 first = st.text_input("First Name *")
-                source = st.selectbox("Contact Source *", ["","Email","Phone Call","Walk In","Social Media","In Person"])
+                source = st.selectbox("Contact Source *", [""]+ ["Email","Phone Call","Walk In","Social Media","In Person"])
                 status = st.selectbox("Status *", [""]+STATUS_LIST)
             with c2:
                 last = st.text_input("Last Name *")
