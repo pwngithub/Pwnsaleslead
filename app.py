@@ -55,8 +55,8 @@ def get_jotform_submissions():
                         return ans_dict.get('answer', '')
                     return ''
 
-                # Handle name separately since it is a dict
-                name_ans = get_ans(config.FIELD_ID['name_first'])
+                # --- THIS IS THE CORRECTED NAME LOGIC ---
+                name_ans = get_ans(config.FIELD_ID['name'])
                 first_name = name_ans.get('first', '') if isinstance(name_ans, dict) else ''
                 last_name = name_ans.get('last', '') if isinstance(name_ans, dict) else ''
 
@@ -255,7 +255,7 @@ def main_app():
         else:
             c0,c1,c2,c3,c4 = st.columns([2,1,1,1,1])
             q = c0.text_input("🔍 Search name")
-            src = c1.selectbox("Source", ["All"] + config.SERVICE_TYPES)
+            src = c1.selectbox("Source", ["All"] + ["Email","Phone Call","Walk In","Social Media","In Person"])
             stt = c2.selectbox("Status", ["All"]+STATUS_LIST)
             svc = c3.selectbox("Service", ["All"]+SERVICE_TYPES)
             lost_opts = ["All"] + sorted([x for x in st.session_state.df["LostReason"].dropna().unique()])
@@ -288,9 +288,10 @@ def main_app():
                 if miss:
                     st.error("Missing: " + ", ".join(miss))
                 else:
+                    # NOTE: Here we are using the numeric ID for the name field
                     payload = {
-                        f'submission[{config.FIELD_ID["name_first"]}][first]': first,
-                        f'submission[{config.FIELD_ID["name_last"]}][last]': last,
+                        f'submission[{config.FIELD_ID["name"]}][first]': first,
+                        f'submission[{config.FIELD_ID["name"]}][last]': last,
                         f'submission[{str(config.FIELD_ID["source"])}]': source,
                         f'submission[{str(config.FIELD_ID["status"])}]': status,
                         f'submission[{str(config.FIELD_ID["service_type"])}]': service,
