@@ -1,17 +1,31 @@
-# Pioneer Sales Lead App – v19.10.30
-# Pipeline with reliable quick-move controls (no drag lib), KPI included
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
+import requests 
+
+# 🔑 NEW: Import configuration variables from the config.py file
+try:
+    from config import (
+        JOTFORM_API_KEY, 
+        JOTFORM_FORM_ID, 
+        JOTFORM_QID_MAP, 
+        STATUS_LIST, 
+        SERVICE_TYPES,
+        TEST_PREFIX # Keep this if you plan to use it for data management later
+    )
+except ImportError:
+    st.error("Error: config.py not found or incomplete. Please ensure config.py is present and contains all required variables.")
+    # Fallback lists to prevent app crash if config fails
+    STATUS_LIST = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer","Lost"]
+    SERVICE_TYPES = ["Internet","Phone","TV","Cell Phone","Internet and Phone","Internet and TV","Internet and Cell Phone"]
+    JOTFORM_API_KEY, JOTFORM_FORM_ID, JOTFORM_QID_MAP = "", "", {}
 
 # --- CONSTANTS ---
 st.set_page_config(page_title="Pioneer Sales Lead App", page_icon="📶", layout="wide")
 
 LOGO = "https://images.squarespace-cdn.com/content/v1/651eb4433b13e72c1034f375/369c5df0-5363-4827-b041-1add0367f447/PBB+long+logo.png?format=1500w"
 
-STATUS_LIST = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer","Lost"]
-SERVICE_TYPES = ["Internet","Phone","TV","Cell Phone","Internet and Phone","Internet and TV","Internet and Cell Phone"]
 COLORS = {
     "Survey Scheduled": "#3b82f6",
     "Survey Completed": "#fbbf24",
@@ -20,8 +34,68 @@ COLORS = {
     "Waiting on Customer": "#a855f7",
     "Lost": "#ef4444"
 }
-SEED_FILE = "saleslead_seed.csv"
+SEED_FILE = "saleslead_seed.csv" # Retained as local cache/fallback
 # -----------------
+
+# --- JOTFORM API HELPER FUNCTIONS ---
+
+def submit_to_jotform(lead_data):
+    """Submits a new lead to JotForm and returns the new Submission ID."""
+    if not all([JOTFORM_API_KEY, JOTFORM_FORM_ID, JOTFORM_QID_MAP]):
+        st.error("JotForm configuration missing. Cannot submit ticket.")
+        return None
+        
+    endpoint = f"https://api.jotform.com/form/{JOTFORM_FORM_ID}/submissions"
+    
+    # Map the incoming lead_data dictionary to JotForm QID keys
+    submission_data = {
+        f"submission[{JOTFORM_QID_MAP['Name_First']}]": lead_data["Name_First"],
+        f"submission[{JOTFORM_QID_MAP['Name_Last']}]": lead_data["Name_Last"],
+        f"submission[{JOTFORM_QID_MAP['ContactSource']}]": lead_data["ContactSource"],
+        f"submission[{JOTFORM_QID_MAP['Status']}]": lead_data["Status"],
+        f"submission[{JOTFORM_QID_MAP['TypeOfService']}]": lead_data["TypeOfService"],
+        f"submission[{JOTFORM_QID_MAP['LostReason']}]": lead_data["LostReason"],
+        f"submission[{JOTFORM_QID_MAP['Notes']}]": lead_data["Notes"],
+        "apiKey": JOTFORM_API_KEY
+    }
+    
+    try:
+        response = requests.post(endpoint, data=submission_data)
+        response.raise_for_status()
+        result = response.json()
+        
+        if result['responseCode'] == 200:
+            return result['content']['submissionID']
+        else:
+            st.error(f"JotForm Submission Error: {result['message']}")
+            return None
+    except requests.exceptions.RequestException as e:
+        st.error(f"API Connection Error: {e}")
+        return None
+
+def delete_submission_from_jotform(submission_id):
+    """Deletes a submission from JotForm using the Submission ID."""
+    if not JOTFORM_API_KEY:
+        st.error("JotForm API Key missing. Cannot delete submission.")
+        return False
+        
+    endpoint = f"https://api.jotform.com/submission/{submission_id}"
+    params = {"apiKey": JOTFORM_API_KEY}
+    
+    try:
+        response = requests.delete(endpoint, params=params)
+        response.raise_for_status()
+        result = response.json()
+        
+        if result.get('responseCode') == 200:
+            return True
+        else:
+            st.error(f"JotForm Deletion Error: {result.get('message', 'Unknown error')}")
+            return False
+    except requests.exceptions.RequestException as e:
+        st.error(f"API Connection Error: {e}")
+        return False
+# ------------------------------------
 
 def kpi_bar(vdf):
     parts = [f"**Total Leads:** {len(vdf)}"]
@@ -30,7 +104,7 @@ def kpi_bar(vdf):
     st.markdown(" | ".join(parts))
 
 def initialize_data():
-    """Initializes or re-loads the DataFrame into session state."""
+    """Initializes or re-loads the DataFrame into session state from local cache."""
     if os.path.exists(SEED_FILE):
         try:
             temp_df = pd.read_csv(SEED_FILE)
@@ -72,14 +146,16 @@ def update_ticket_details(sid, new_status, new_service, new_lost, new_notes):
         st.success(f"Ticket {sid} changes saved.")
 
 def delete_ticket(sid):
-    """Deletes a ticket from the DataFrame and saves the file."""
-    # Filter the DataFrame to keep everything *except* the selected SubmissionID
-    st.session_state.df = st.session_state.df[st.session_state.df["SubmissionID"] != sid]
+    """Deletes a ticket from JotForm via API and updates local state."""
     
-    # Save the new, smaller DataFrame
-    st.session_state.df.to_csv(SEED_FILE, index=False)
-    
-    st.success(f"Ticket {sid} has been permanently deleted. Please refresh the page.")
+    # 🔑 DELETE: Call JotForm API to delete submission
+    if delete_submission_from_jotform(sid):
+        # Update local state ONLY if JotForm deletion was successful
+        st.session_state.df = st.session_state.df[st.session_state.df["SubmissionID"] != sid]
+        st.session_state.df.to_csv(SEED_FILE, index=False) # Update local cache
+        st.success(f"Ticket {sid} has been permanently deleted from JotForm and the local list. Please refresh the page.")
+    else:
+        st.error(f"Failed to delete submission {sid} from JotForm. Local data unchanged.")
 # ------------------------------------
 
 def main_app():
@@ -128,7 +204,7 @@ def main_app():
                                     "Move to", 
                                     STATUS_LIST, 
                                     index=STATUS_LIST.index(status), 
-                                    key=widget_key, # Use the generated key
+                                    key=widget_key, 
                                     on_change=update_ticket_status,
                                     args=(row['SubmissionID'], widget_key) 
                                 )
@@ -172,32 +248,46 @@ def main_app():
             lost = st.text_input("Lost Reason", key="add_lost")
             
             if st.form_submit_button("Create Ticket"):
-                # Data validation and adding logic remains the same
+                # Data validation
                 miss = [n for n,vv in [("First Name",st.session_state.add_first),("Last Name",st.session_state.add_last),("Source",st.session_state.add_source),("Status",st.session_state.add_status),("Service",st.session_state.add_service)] if not vv]
                 if miss:
                     st.error("Missing: " + ", ".join(miss))
                 else:
-                    sid = f"seed_{int(datetime.now().timestamp())}"
-                    row = {
-                        "SubmissionID": sid,
-                        "Name": f"{st.session_state.add_first} {st.session_state.add_last}",
+                    # Prepare data for JotForm submission (using keys from config.py)
+                    lead_data = {
+                        "Name_First": st.session_state.add_first,
+                        "Name_Last": st.session_state.add_last,
                         "ContactSource": st.session_state.add_source,
                         "Status": st.session_state.add_status,
                         "TypeOfService": st.session_state.add_service,
-                        "LostReason": st.session_state.add_lost or None,
+                        "LostReason": st.session_state.add_lost or "",
                         "Notes": st.session_state.add_notes or "",
-                        "Street": None,"City": None,"State": None,"Postal": None,
-                        "CreatedAt": datetime.now(),
-                        "LastUpdated": datetime.now(),
                     }
                     
-                    current_df = st.session_state.df
-                    new_row_df = pd.DataFrame([row], columns=current_df.columns)
+                    # 🔑 CREATE: Submit to JotForm API
+                    submission_id = submit_to_jotform(lead_data)
                     
-                    st.session_state.df = pd.concat([current_df, new_row_df], ignore_index=True)
-                    st.session_state.df.to_csv(SEED_FILE, index=False)
-                    
-                    st.success("Ticket created. Refresh the page to see it in the Pipeline view.")
+                    if submission_id:
+                        # If JotForm submission succeeded, update the local DataFrame
+                        row = {
+                            "SubmissionID": submission_id, # <-- JotForm ID
+                            "Name": f"{st.session_state.add_first} {st.session_state.add_last}",
+                            "ContactSource": st.session_state.add_source,
+                            "Status": st.session_state.add_status,
+                            "TypeOfService": st.session_state.add_service,
+                            "LostReason": st.session_state.add_lost or None,
+                            "Notes": st.session_state.add_notes or "",
+                            "Street": None,"City": None,"State": None,"Postal": None,
+                            "CreatedAt": datetime.now(),
+                            "LastUpdated": datetime.now(),
+                        }
+                        
+                        current_df = st.session_state.df
+                        new_row_df = pd.DataFrame([row], columns=current_df.columns)
+                        st.session_state.df = pd.concat([current_df, new_row_df], ignore_index=True)
+                        st.session_state.df.to_csv(SEED_FILE, index=False) # Update local cache
+                        
+                        st.success(f"Ticket created successfully in JotForm! Submission ID: {submission_id}. Please refresh the page.")
 
     with tab_edit:
         st.subheader("Edit Ticket")
@@ -252,7 +342,7 @@ def main_app():
                     with c_yes:
                         # Call the delete function on confirmation
                         if st.button("Yes, Delete Permanently", type="primary", use_container_width=True):
-                            delete_ticket(sid)
+                            delete_ticket(sid) # <-- This calls the JotForm API delete
                             st.session_state['confirm_delete'] = None # Clear confirmation
                     with c_no:
                         # Clear confirmation if canceled
