@@ -124,7 +124,7 @@ def delete_jotform_submission(submission_id):
 def refresh_data():
     """Clear cache and rerun to fetch fresh data."""
     st.cache_data.clear()
-    st.rerun() # <-- THE FIX IS HERE
+    st.rerun()
 
 def update_ticket_status(submission_id, widget_key):
     """Updates status, adds history note, and auto-stamps date."""
@@ -207,62 +207,67 @@ def main_app():
     with right:
         st.button("🔄 Refresh Data", on_click=refresh_data, use_container_width=True)
 
-    # ==============================================================================
-    # Load and manage data from JotForm
-    # ==============================================================================
+    # Load data from JotForm
     st.session_state.df = get_jotform_submissions()
-
-    if st.session_state.df.empty:
-        st.warning("Could not load any tickets from JotForm. The form may be empty or the API key is invalid.")
-        return # Stop execution if no data
-        
-    # Tabs
+    is_empty = st.session_state.df.empty
+    
+    # Define tabs
     tab_pipe, tab_all, tab_add, tab_edit, tab_kpi = st.tabs(["🧩 Pipeline View","📋 All Tickets","➕ Add Ticket","✏️ Edit Ticket","📈 KPI"])
+
+    # Display a warning if the dataframe is empty, but still render the tabs
+    if is_empty:
+        st.warning("No tickets found. You can create the first one in the 'Add Ticket' tab.")
 
     with tab_pipe:
         st.subheader("Pipeline")
-        kpi_bar(st.session_state.df)
-        cols = st.columns(6)
-        for i, status in enumerate(STATUS_LIST):
-            with cols[i]:
-                status_count = int((st.session_state.df['Status']==status).sum())
-                st.markdown(f"<div style='background:{COLORS[status]};padding:8px;border-radius:8px;color:#111;font-weight:700'>{status} ({status_count})</div>", unsafe_allow_html=True)
-                
-                subset = st.session_state.df[st.session_state.df["Status"]==status]
-                
-                if subset.empty:
-                    st.write("—")
-                else:
-                    for _, row in subset.sort_values("LastUpdated", ascending=False).iterrows():
-                        with st.expander(f"{row['Name']} · {row.get('TypeOfService','')}", expanded=False):
-                            st.caption(f"Updated: {row['LastUpdated'].strftime('%Y-%m-%d %H:%M')}")
-                            st.write(row.get("Notes",""))
-                            widget_key = f"mv_{row['SubmissionID']}"
-                            st.selectbox(
-                                "Move to", STATUS_LIST, 
-                                index=STATUS_LIST.index(status), 
-                                key=widget_key,
-                                on_change=update_ticket_status,
-                                args=(row['SubmissionID'], widget_key) 
-                            )
+        if is_empty:
+            st.info("There are no tickets to display in the pipeline.")
+        else:
+            kpi_bar(st.session_state.df)
+            cols = st.columns(6)
+            for i, status in enumerate(STATUS_LIST):
+                with cols[i]:
+                    status_count = int((st.session_state.df['Status']==status).sum())
+                    st.markdown(f"<div style='background:{COLORS[status]};padding:8px;border-radius:8px;color:#111;font-weight:700'>{status} ({status_count})</div>", unsafe_allow_html=True)
+                    
+                    subset = st.session_state.df[st.session_state.df["Status"]==status]
+                    
+                    if subset.empty:
+                        st.write("—")
+                    else:
+                        for _, row in subset.sort_values("LastUpdated", ascending=False).iterrows():
+                            with st.expander(f"{row['Name']} · {row.get('TypeOfService','')}", expanded=False):
+                                st.caption(f"Updated: {row['LastUpdated'].strftime('%Y-%m-%d %H:%M')}")
+                                st.write(row.get("Notes",""))
+                                widget_key = f"mv_{row['SubmissionID']}"
+                                st.selectbox(
+                                    "Move to", STATUS_LIST, 
+                                    index=STATUS_LIST.index(status), 
+                                    key=widget_key,
+                                    on_change=update_ticket_status,
+                                    args=(row['SubmissionID'], widget_key) 
+                                )
 
     with tab_all:
         st.subheader("All Tickets")
-        c0,c1,c2,c3,c4 = st.columns([2,1,1,1,1])
-        q = c0.text_input("🔍 Search name")
-        src = c1.selectbox("Source", ["All"] + config.SERVICE_TYPES)
-        stt = c2.selectbox("Status", ["All"]+STATUS_LIST)
-        svc = c3.selectbox("Service", ["All"]+SERVICE_TYPES)
-        lost_opts = ["All"] + sorted([x for x in st.session_state.df["LostReason"].dropna().unique()])
-        los = c4.selectbox("Lost Reason", lost_opts)
-        
-        v = st.session_state.df.copy()
-        if q: v = v[v["Name"].str.contains(q, case=False, na=False)]
-        if src!="All": v = v[v["ContactSource"]==src]
-        if stt!="All": v = v[v["Status"]==stt]
-        if svc!="All": v = v[v["TypeOfService"]==svc]
-        if los!="All": v = v[v["LostReason"]==los]
-        st.dataframe(v[["SubmissionID","Name","ContactSource","Status","TypeOfService","LostReason","CreatedAt","LastUpdated"]], use_container_width=True)
+        if is_empty:
+            st.info("There are no tickets to display.")
+        else:
+            c0,c1,c2,c3,c4 = st.columns([2,1,1,1,1])
+            q = c0.text_input("🔍 Search name")
+            src = c1.selectbox("Source", ["All"] + config.SERVICE_TYPES)
+            stt = c2.selectbox("Status", ["All"]+STATUS_LIST)
+            svc = c3.selectbox("Service", ["All"]+SERVICE_TYPES)
+            lost_opts = ["All"] + sorted([x for x in st.session_state.df["LostReason"].dropna().unique()])
+            los = c4.selectbox("Lost Reason", lost_opts)
+            
+            v = st.session_state.df.copy()
+            if q: v = v[v["Name"].str.contains(q, case=False, na=False)]
+            if src!="All": v = v[v["ContactSource"]==src]
+            if stt!="All": v = v[v["Status"]==stt]
+            if svc!="All": v = v[v["TypeOfService"]==svc]
+            if los!="All": v = v[v["LostReason"]==los]
+            st.dataframe(v[["SubmissionID","Name","ContactSource","Status","TypeOfService","LostReason","CreatedAt","LastUpdated"]], use_container_width=True)
 
     with tab_add:
         st.subheader("Add Ticket")
@@ -307,60 +312,66 @@ def main_app():
 
     with tab_edit:
         st.subheader("Edit Ticket")
-        opts = {f"{r['Name']} ({r['SubmissionID']})": r["SubmissionID"] for _, r in st.session_state.df.sort_values("Name").iterrows()}
-        
-        sel_key = st.selectbox("Select by Name", list(opts.keys()), key="edit_sel")
-        if sel_key:
-            sid = opts[sel_key]
-            row = st.session_state.df[st.session_state.df["SubmissionID"]==sid].iloc[0]
+        if is_empty:
+            st.info("There are no tickets to edit.")
+        else:
+            opts = {f"{r['Name']} ({r['SubmissionID']})": r["SubmissionID"] for _, r in st.session_state.df.sort_values("Name").iterrows()}
             
-            c1,c2 = st.columns(2)
-            with c1:
-                new_status = st.selectbox("Status", STATUS_LIST, 
-                                        index=STATUS_LIST.index(row["Status"]) if row["Status"] in STATUS_LIST else 0,
-                                        key=f"edit_status_{sid}")
-                new_service = st.selectbox("Type of Service", SERVICE_TYPES, 
-                                            index=SERVICE_TYPES.index(row["TypeOfService"]) if row["TypeOfService"] in SERVICE_TYPES else 0,
-                                            key=f"edit_service_{sid}")
-            with c2:
-                new_lost = st.text_input("Lost Reason", value=row.get("LostReason") or "", key=f"edit_lost_{sid}")
-                new_notes = st.text_area("Notes", value=row.get("Notes") or "", key=f"edit_notes_{sid}", help="A history entry will be automatically added if you change the status.")
+            sel_key = st.selectbox("Select by Name", list(opts.keys()), key="edit_sel")
+            if sel_key:
+                sid = opts[sel_key]
+                row = st.session_state.df[st.session_state.df["SubmissionID"]==sid].iloc[0]
                 
-            col_save, col_delete = st.columns([1,1])
-            with col_save:
-                if st.button("Save Changes", use_container_width=True):
-                    update_ticket_details(sid, new_status, new_service, new_lost, new_notes)
-            with col_delete:
-                if st.button("❌ Delete Ticket", type="primary", use_container_width=True):
-                    st.session_state['confirm_delete'] = sid
-            
-            if st.session_state.get('confirm_delete') == sid:
-                st.warning(f"Are you sure you want to delete ticket for {row['Name']} ({sid})?")
-                c_yes, c_no = st.columns(2)
-                with c_yes:
-                    if st.button("Yes, Delete Permanently", type="primary", use_container_width=True):
-                        if delete_jotform_submission(sid):
-                            st.success(f"Ticket {sid} has been permanently deleted.")
+                c1,c2 = st.columns(2)
+                with c1:
+                    new_status = st.selectbox("Status", STATUS_LIST, 
+                                            index=STATUS_LIST.index(row["Status"]) if row["Status"] in STATUS_LIST else 0,
+                                            key=f"edit_status_{sid}")
+                    new_service = st.selectbox("Type of Service", SERVICE_TYPES, 
+                                                index=SERVICE_TYPES.index(row["TypeOfService"]) if row["TypeOfService"] in SERVICE_TYPES else 0,
+                                                key=f"edit_service_{sid}")
+                with c2:
+                    new_lost = st.text_input("Lost Reason", value=row.get("LostReason") or "", key=f"edit_lost_{sid}")
+                    new_notes = st.text_area("Notes", value=row.get("Notes") or "", key=f"edit_notes_{sid}", help="A history entry will be automatically added if you change the status.")
+                    
+                col_save, col_delete = st.columns([1,1])
+                with col_save:
+                    if st.button("Save Changes", use_container_width=True):
+                        update_ticket_details(sid, new_status, new_service, new_lost, new_notes)
+                with col_delete:
+                    if st.button("❌ Delete Ticket", type="primary", use_container_width=True):
+                        st.session_state['confirm_delete'] = sid
+                
+                if st.session_state.get('confirm_delete') == sid:
+                    st.warning(f"Are you sure you want to delete ticket for {row['Name']} ({sid})?")
+                    c_yes, c_no = st.columns(2)
+                    with c_yes:
+                        if st.button("Yes, Delete Permanently", type="primary", use_container_width=True):
+                            if delete_jotform_submission(sid):
+                                st.success(f"Ticket {sid} has been permanently deleted.")
+                                st.session_state['confirm_delete'] = None
+                                refresh_data()
+                    with c_no:
+                        if st.button("No, Keep It", use_container_width=True):
                             st.session_state['confirm_delete'] = None
-                            refresh_data()
-                with c_no:
-                    if st.button("No, Keep It", use_container_width=True):
-                        st.session_state['confirm_delete'] = None
 
     with tab_kpi:
         st.subheader("KPI Dashboard")
-        v = st.session_state.df.copy()
-        kpi_bar(v)
-        st.write("---")
-        st.write("**By Status**")
-        st.dataframe(v.groupby("Status").size().reset_index(name="Count"), use_container_width=True)
-        st.write("**By Source**")
-        st.dataframe(v.groupby("ContactSource").size().reset_index(name="Count"), use_container_width=True)
-        st.write("**By Service**")
-        st.dataframe(v.groupby("TypeOfService").size().reset_index(name="Count"), use_container_width=True)
-        if "LostReason" in v.columns and not v["LostReason"].dropna().empty:
-            st.write("**Lost Reasons**")
-            st.dataframe(v.groupby("LostReason").size().reset_index(name="Count"), use_container_width=True)
+        if is_empty:
+            st.info("There is no data for the KPI dashboard.")
+        else:
+            v = st.session_state.df.copy()
+            kpi_bar(v)
+            st.write("---")
+            st.write("**By Status**")
+            st.dataframe(v.groupby("Status").size().reset_index(name="Count"), use_container_width=True)
+            st.write("**By Source**")
+            st.dataframe(v.groupby("ContactSource").size().reset_index(name="Count"), use_container_width=True)
+            st.write("**By Service**")
+            st.dataframe(v.groupby("TypeOfService").size().reset_index(name="Count"), use_container_width=True)
+            if "LostReason" in v.columns and not v["LostReason"].dropna().empty:
+                st.write("**Lost Reasons**")
+                st.dataframe(v.groupby("LostReason").size().reset_index(name="Count"), use_container_width=True)
 
     st.markdown("<hr/>", unsafe_allow_html=True)
     st.caption("Powered by Pioneer Broadband | Internal Use Only")
