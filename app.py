@@ -47,14 +47,22 @@ def initialize_data():
         st.caption("ℹ️ No local CSV found — JotForm fallback not enabled in this build")
 
 # --- CALLBACK FUNCTIONS FOR WIDGETS ---
-def update_ticket_status(submission_id, new_status):
-    """Updates status and saves the DataFrame, without calling rerun."""
+
+def update_ticket_status(submission_id, widget_key):
+    """
+    FIX: Updates status using the widget's value from session state, then saves.
+    Accepts widget_key as an argument and reads st.session_state[widget_key] 
+    only when the callback runs.
+    """
+    # Retrieve the new status value from session state using the widget_key
+    new_status = st.session_state[widget_key]
+    
     ix = st.session_state.df.index[st.session_state.df["SubmissionID"] == submission_id]
     if len(ix):
         st.session_state.df.loc[ix, "Status"] = new_status
         st.session_state.df.loc[ix, "LastUpdated"] = pd.Timestamp.now()
         st.session_state.df.to_csv(SEED_FILE, index=False)
-        st.success(f"Moved ticket {submission_id} to {new_status}") # Success message on save
+        st.success(f"Moved ticket {submission_id} to {new_status}") 
 
 def update_ticket_details(sid, new_status, new_service, new_lost, new_notes):
     """Updates all details and saves the DataFrame, without calling rerun."""
@@ -66,7 +74,7 @@ def update_ticket_details(sid, new_status, new_service, new_lost, new_notes):
         st.session_state.df.loc[ix, "Notes"] = new_notes
         st.session_state.df.loc[ix, "LastUpdated"] = pd.Timestamp.now()
         st.session_state.df.to_csv(SEED_FILE, index=False)
-        st.success(f"Ticket {sid} changes saved.") # Success message on save
+        st.success(f"Ticket {sid} changes saved.")
 # ------------------------------------
 
 def main_app():
@@ -104,20 +112,21 @@ def main_app():
                         st.write("—")
                     else:
                         for _, row in subset.sort_values("LastUpdated", ascending=False).iterrows():
+                            # Set expanded=False to minimize screen space
                             with st.expander(f"{row['Name']} · {row.get('TypeOfService','')}", expanded=False):
                                 st.caption(f"Updated: {row['LastUpdated'].strftime('%Y-%m-%d %H:%M')}")
                                 st.write(row.get("Notes",""))
                                 
                                 # quick move control
-                                # ❌ REMOVED: if move_to != status: ... st.experimental_rerun()
-                                # ✅ FIX: Use on_change callback to update data without rerun
+                                widget_key = f"mv_{row['SubmissionID']}"
                                 st.selectbox(
                                     "Move to", 
                                     STATUS_LIST, 
                                     index=STATUS_LIST.index(status), 
-                                    key=f"mv_{row['SubmissionID']}",
+                                    key=widget_key, # Use the generated key
                                     on_change=update_ticket_status,
-                                    args=(row['SubmissionID'], st.session_state[f"mv_{row['SubmissionID']}"])
+                                    # FIX: Pass the submission_id and the widget_key itself to the args
+                                    args=(row['SubmissionID'], widget_key) 
                                 )
 
 
@@ -185,7 +194,7 @@ def main_app():
                     st.session_state.df.to_csv(SEED_FILE, index=False)
                     
                     st.success("Ticket created. Refresh the page to see it in the Pipeline view.")
-                    # ⚠️ Removed st.experimental_rerun()
+                    # Removed st.experimental_rerun()
 
     with tab_edit:
         st.subheader("Edit Ticket")
@@ -198,7 +207,6 @@ def main_app():
             if not opts:
                 st.info("No selectable tickets.")
             else:
-                # Use a unique key for the selection box
                 sel = st.selectbox("Select by Name", list(opts.keys()), key="edit_sel")
                 sid = opts[sel]
                 row = st.session_state.df[st.session_state.df["SubmissionID"]==sid].iloc[0]
@@ -215,8 +223,6 @@ def main_app():
                     new_lost = st.text_input("Lost Reason", value=row.get("LostReason") or "", key="edit_lost")
                     new_notes = st.text_area("Notes", value=row.get("Notes") or "", key="edit_notes")
                     
-                # ❌ REMOVED: st.button("Save Changes") followed by st.experimental_rerun()
-                # ✅ FIX: Use the callback function and pass the session state values as args
                 if st.button("Save Changes"):
                     update_ticket_details(
                         sid, 
@@ -226,7 +232,6 @@ def main_app():
                         st.session_state.edit_notes
                     )
                     st.info("Changes saved. Refresh the page to see them applied in the Pipeline view.")
-                    # ⚠️ Removed st.experimental_rerun()
 
 
     with tab_kpi:
