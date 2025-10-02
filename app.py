@@ -55,13 +55,12 @@ def get_jotform_submissions():
                         return ans_dict.get('answer', '')
                     return ''
                 
-                # Helper for parsing date fields from JotForm
                 def get_date_ans(qid):
                     date_ans = get_ans(qid)
-                    if isinstance(date_ans, dict): # Dates can be dicts
+                    if isinstance(date_ans, dict):
                         date_str = f"{date_ans.get('year')}-{date_ans.get('month')}-{date_ans.get('day')}"
                         return pd.to_datetime(date_str, errors='coerce')
-                    return pd.to_datetime(date_ans, errors='coerce') # Or sometimes strings
+                    return pd.to_datetime(date_ans, errors='coerce')
 
                 name_field_str = config.FIELD_ID.get('name_first', '')
                 name_id_match = re.search(r'\d+', name_field_str)
@@ -80,9 +79,9 @@ def get_jotform_submissions():
                     "TypeOfService": get_ans(config.FIELD_ID['service_type']),
                     "LostReason": get_ans(config.FIELD_ID['lost_reason']),
                     "Notes": get_ans(config.FIELD_ID['notes']),
-                    "CreatedAt": pd.to_datetime(sub.get('created_at')),
-                    "LastUpdated": pd.to_datetime(sub.get('updated_at')) if sub.get('updated_at') else pd.to_datetime(sub.get('created_at')),
-                    # --- NEW: Fetching dedicated date fields for analytics ---
+                    # FIX: Ensure all datetimes are timezone-aware (UTC) upon creation
+                    "CreatedAt": pd.to_datetime(sub.get('created_at'), utc=True),
+                    "LastUpdated": pd.to_datetime(sub.get('updated_at'), utc=True) if sub.get('updated_at') else pd.to_datetime(sub.get('created_at'), utc=True),
                     "SurveyScheduledDate": get_date_ans(config.FIELD_ID['survey_scheduled_date']),
                     "InstalledDate": get_date_ans(config.FIELD_ID['installed_date']),
                 })
@@ -90,7 +89,7 @@ def get_jotform_submissions():
         df = pd.DataFrame(records)
         for col in ["SubmissionID", "Name", "Status", "CreatedAt"]:
             if col not in df.columns:
-                df[col] = pd.Series(dtype='object' if col != "CreatedAt" else 'datetime64[ns]')
+                df[col] = pd.Series(dtype='object' if col != "CreatedAt" else 'datetime64[ns, UTC]')
         return df
 
     except requests.exceptions.RequestException as e:
@@ -100,7 +99,6 @@ def get_jotform_submissions():
         st.error(f"An error occurred while processing JotForm data: {e}")
         return pd.DataFrame()
 
-# --- All other API functions (update, add, delete) remain the same ---
 def update_jotform_submission(submission_id, payload):
     try:
         url = f"https://api.jotform.com/submission/{submission_id}?apiKey={config.API_KEY}"
@@ -138,31 +136,34 @@ def refresh_data():
     st.rerun()
 
 def calculate_status_durations(df):
-    """Parses notes to calculate time spent in each status for each ticket."""
     duration_records = []
     now = datetime.now(timezone.utc)
 
     for _, row in df.iterrows():
-        notes = row['Notes']
-        # Find all status change entries in the notes
+        notes = row.get('Notes', '') or ''
         history = re.findall(r'\[(.*?)\] Status → (.*?)\n', notes)
         
-        # Convert to datetime objects and sort chronologically
         events = []
         for ts_str, status in history:
-            events.append({'timestamp': pd.to_datetime(ts_str), 'status': status})
+            # FIX: Ensure timestamps parsed from notes are treated as UTC
+            events.append({'timestamp': pd.to_datetime(ts_str, utc=True), 'status': status})
         
         events.sort(key=lambda x: x['timestamp'])
 
-        # Add the creation date as the first event
+        # The 'CreatedAt' timestamp is now guaranteed to be UTC from get_jotform_submissions
+        first_event_timestamp = row['CreatedAt']
+        
+        # Determine the status at the time of creation
         initial_status = events[0]['status'] if events else row['Status']
-        events.insert(0, {'timestamp': row['CreatedAt'], 'status': initial_status})
+        events.insert(0, {'timestamp': first_event_timestamp, 'status': initial_status})
         
         # Calculate duration between events
         for i in range(len(events)):
             start_time = events[i]['timestamp']
             end_time = events[i+1]['timestamp'] if i + 1 < len(events) else now
-            duration = (end_time - start_time).total_seconds() / (3600 * 24) # Duration in days
+            
+            # This calculation is now safe because all datetimes are timezone-aware
+            duration = (end_time - start_time).total_seconds() / (3600 * 24)
             
             duration_records.append({
                 'SubmissionID': row['SubmissionID'],
@@ -173,8 +174,6 @@ def calculate_status_durations(df):
             
     return pd.DataFrame(duration_records)
 
-
-# --- All other callbacks (update_ticket_status, etc.) remain the same ---
 def update_ticket_status(submission_id, widget_key):
     new_status = st.session_state[widget_key]
     row = st.session_state.df[st.session_state.df["SubmissionID"] == submission_id].iloc[0]
@@ -183,7 +182,8 @@ def update_ticket_status(submission_id, widget_key):
     if old_status != new_status:
         payload = {}
         payload[f'submission[{config.FIELD_ID["status"]}]'] = new_status
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        # FIX: Generate new timestamps in UTC
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
         history_note = f"[{timestamp}] Status → {new_status}"
         current_notes = row.get('Notes', '')
         new_notes = f"{history_note}\n{current_notes}".strip()
@@ -191,9 +191,11 @@ def update_ticket_status(submission_id, widget_key):
         if new_status in STATUS_TO_DATE_FIELD:
             date_field_key = STATUS_TO_DATE_FIELD[new_status]
             date_field_id = config.FIELD_ID[date_field_key]
-            payload[f'submission[{date_field_id}][month]'] = datetime.now().month
-            payload[f'submission[{date_field_id}][day]'] = datetime.now().day
-            payload[f'submission[{date_field_id}][year]'] = datetime.now().year
+            # Jotform date fields don't have timezones, so local time is fine here
+            now_local = datetime.now()
+            payload[f'submission[{date_field_id}][month]'] = now_local.month
+            payload[f'submission[{date_field_id}][day]'] = now_local.day
+            payload[f'submission[{date_field_id}][year]'] = now_local.year
         if update_jotform_submission(submission_id, payload):
             st.success(f"Moved ticket {submission_id} to {new_status}")
             refresh_data()
@@ -207,16 +209,18 @@ def update_ticket_details(sid, new_status, new_service, new_lost, new_notes):
     }
     if old_status != new_status:
         payload[f'submission[{config.FIELD_ID["status"]}]'] = new_status
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        # FIX: Generate new timestamps in UTC
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
         history_note = f"[{timestamp}] Status → {new_status}"
         new_notes_with_history = f"{history_note}\n{new_notes}".strip()
         payload[f'submission[{config.FIELD_ID["notes"]}]'] = new_notes_with_history
         if new_status in STATUS_TO_DATE_FIELD:
             date_field_key = STATUS_TO_DATE_FIELD[new_status]
             date_field_id = config.FIELD_ID[date_field_key]
-            payload[f'submission[{date_field_id}][month]'] = datetime.now().month
-            payload[f'submission[{date_field_id}][day]'] = datetime.now().day
-            payload[f'submission[{date_field_id}][year]'] = datetime.now().year
+            now_local = datetime.now()
+            payload[f'submission[{date_field_id}][month]'] = now_local.month
+            payload[f'submission[{date_field_id}][day]'] = now_local.day
+            payload[f'submission[{date_field_id}][year]'] = now_local.year
     else:
         payload[f'submission[{config.FIELD_ID["notes"]}]'] = new_notes
     if update_jotform_submission(sid, payload):
@@ -232,7 +236,6 @@ def kpi_bar(vdf):
 # --- MAIN APP LAYOUT ---
 
 def main_app():
-    # Header and data loading are the same
     left, mid, right = st.columns([1, 4, 1])
     with left:
         st.image(LOGO, use_container_width=True)
@@ -246,7 +249,6 @@ def main_app():
     if is_empty:
         st.warning("No tickets found. You can create the first one in the 'Add Ticket' tab.")
 
-    # All other tabs (Pipeline, All Tickets, Add, Edit) remain the same
     with tab_pipe:
         st.subheader("Pipeline")
         if is_empty:
@@ -318,9 +320,10 @@ def main_app():
                         if status in STATUS_TO_DATE_FIELD:
                             date_field_key = STATUS_TO_DATE_FIELD[status]
                             date_field_id = config.FIELD_ID[date_field_key]
-                            payload[f'submission[{date_field_id}][month]'] = datetime.now().month
-                            payload[f'submission[{date_field_id}][day]'] = datetime.now().day
-                            payload[f'submission[{date_field_id}][year]'] = datetime.now().year
+                            now_local = datetime.now()
+                            payload[f'submission[{date_field_id}][month]'] = now_local.month
+                            payload[f'submission[{date_field_id}][day]'] = now_local.day
+                            payload[f'submission[{date_field_id}][year]'] = now_local.year
                         if add_jotform_submission(payload):
                             st.success("Ticket created successfully.")
                             refresh_data()
@@ -363,7 +366,6 @@ def main_app():
                         if st.button("No, Keep It", use_container_width=True):
                             st.session_state['confirm_delete'] = None
 
-    # --- ENHANCED KPI / Analytics Tab ---
     with tab_kpi:
         st.subheader("KPI & Lifecycle Dashboard")
         if is_empty:
@@ -373,7 +375,6 @@ def main_app():
             kpi_bar(v)
             st.markdown("---")
 
-            # --- 1. Survey to Install Duration ---
             st.subheader("⏱️ Process Duration")
             installed_tickets = v[v['InstalledDate'].notna() & v['SurveyScheduledDate'].notna()].copy()
             if not installed_tickets.empty:
@@ -387,32 +388,29 @@ def main_app():
 
             st.markdown("---")
             
-            # --- 2. Average Time in Each Status ---
             st.subheader("📊 Average Time in Each Status")
             duration_df = calculate_status_durations(v)
             if not duration_df.empty:
                 avg_status_duration = duration_df.groupby('Status')['Duration (Days)'].mean().reset_index()
+                avg_status_duration['Duration (Days)'] = avg_status_duration['Duration (Days)'].round(1)
                 st.dataframe(avg_status_duration.sort_values("Duration (Days)", ascending=False), use_container_width=True)
             else:
                 st.info("Not enough status change history to calculate durations.")
 
             st.markdown("---")
 
-            # --- 3. Overall Ticket Age ---
             st.subheader("⏳ Age of Open Tickets")
             open_tickets = v[~v['Status'].isin(['Installed', 'Lost'])].copy()
             if not open_tickets.empty:
-                now = datetime.now(timezone.utc)
-                open_tickets['Age (Days)'] = (now - open_tickets['CreatedAt']).dt.days
+                now_utc = datetime.now(timezone.utc)
+                open_tickets['Age (Days)'] = (now_utc - open_tickets['CreatedAt']).dt.days
                 st.dataframe(open_tickets[['Name', 'Status', 'Age (Days)']].sort_values('Age (Days)', ascending=False), use_container_width=True)
             else:
                 st.info("There are no open tickets.")
 
-
     st.markdown("<hr/>", unsafe_allow_html=True)
     st.caption("Powered by Pioneer Broadband | Internal Use Only")
 
-# --- APP INITIALIZATION ---
 if __name__ == "__main__":
     if 'confirm_delete' not in st.session_state:
         st.session_state['confirm_delete'] = None
