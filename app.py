@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta, date
 import requests
 import config # Import the config file
 import re
-import plotly.express as px # NEW: Import Plotly
+import plotly.express as px
 
 # --- CONSTANTS ---
 st.set_page_config(page_title="Pioneer Sales Lead App", page_icon="📶", layout="wide")
@@ -15,7 +15,8 @@ LOGO = "https://images.squarespace-cdn.com/content/v1/651eb4433b13e72c1034f375/3
 
 STATUS_LIST = config.STATUS_LIST
 SERVICE_TYPES = config.SERVICE_TYPES
-SALES_TEAM = [details["name"] for details in config.USERS.values()]
+# Load the sales team from st.secrets
+SALES_TEAM = [details["name"] for username, details in st.secrets["users"].items()]
 
 COLORS = {
     "Survey Scheduled": "#3b82f6", "Survey Completed": "#fbbf24", "Scheduled": "#fb923c",
@@ -29,11 +30,14 @@ STATUS_TO_DATE_FIELD = {
 }
 # -----------------
 
-# --- JOTFORM API FUNCTIONS and HELPERS (No changes in this section) ---
+# --- JOTFORM API FUNCTIONS and HELPERS ---
 @st.cache_data(ttl=300)
 def get_jotform_submissions():
     try:
-        url = f"https://api.jotform.com/form/{config.FORM_ID}/submissions?apiKey={config.API_KEY}&limit=1000"
+        api_key = st.secrets["JOTFORM_API_KEY"]
+        form_id = st.secrets["JOTFORM_FORM_ID"]
+        url = f"https://api.jotform.com/form/{form_id}/submissions?apiKey={api_key}&limit=1000"
+        
         response = requests.get(url); response.raise_for_status()
         data = response.json().get('content', [])
         records = []
@@ -73,24 +77,26 @@ def get_jotform_submissions():
         return df
     except Exception as e:
         st.error(f"An error occurred while processing JotForm data: {e}"); return pd.DataFrame()
+
+def api_request(method, url_suffix, payload=None):
+    try:
+        api_key = st.secrets["JOTFORM_API_KEY"]
+        base_url = "https://api.jotform.com"
+        url = f"{base_url}/{url_suffix}?apiKey={api_key}"
+        response = requests.request(method, url, data=payload)
+        response.raise_for_status()
+        return True
+    except requests.exceptions.RequestException as e:
+        st.error(f"API Request Failed: {e}"); return False
+
 def update_jotform_submission(submission_id, payload):
-    try:
-        url = f"https://api.jotform.com/submission/{submission_id}?apiKey={config.API_KEY}"
-        response = requests.post(url, data=payload); response.raise_for_status(); return True
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error updating ticket {submission_id}: {e}"); return False
+    return api_request('POST', f"submission/{submission_id}", payload)
 def add_jotform_submission(payload):
-    try:
-        url = f"https://api.jotform.com/form/{config.FORM_ID}/submissions?apiKey={config.API_KEY}"
-        response = requests.post(url, data=payload); response.raise_for_status(); return True
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error creating new ticket: {e}"); return False
+    form_id = st.secrets["JOTFORM_FORM_ID"]
+    return api_request('POST', f"form/{form_id}/submissions", payload)
 def delete_jotform_submission(submission_id):
-    try:
-        url = f"https://api.jotform.com/submission/{submission_id}?apiKey={config.API_KEY}"
-        response = requests.delete(url); response.raise_for_status(); return True
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error deleting ticket {submission_id}: {e}"); return False
+    return api_request('DELETE', f"submission/{submission_id}")
+
 def refresh_data():
     st.cache_data.clear(); st.rerun()
 def calculate_status_durations(df):
@@ -149,12 +155,15 @@ def update_ticket_details(sid, new_status, new_service, new_lost, new_notes, new
         payload[f'submission[{config.FIELD_ID["notes"]}]'] = new_notes
     if update_jotform_submission(sid, payload):
         st.success(f"Ticket {sid} changes saved."); refresh_data()
+
+# --- AUTHENTICATION LOGIC ---
 def check_password():
     st.image(LOGO, width=300); st.title("Sales Lead Tracker Login")
+    users_dict = st.secrets["users"]
     username = st.text_input("Username", key="login_user"); password = st.text_input("Password", type="password", key="login_pass")
     if st.button("Login"):
-        if username in config.USERS and config.USERS[username]["password"] == password:
-            st.session_state.update({"authentication_status": True, "name": config.USERS[username]["name"], "role": config.USERS[username]["role"]}); st.rerun()
+        if username in users_dict and users_dict[username]["password"] == password:
+            st.session_state.update({"authentication_status": True, "name": users_dict[username]["name"], "role": users_dict[username]["role"]}); st.rerun()
         else:
             st.error("😕 Username not found or password incorrect")
     
@@ -169,7 +178,7 @@ def main_app():
     with right:
         st.button("🔄 Refresh Data", on_click=refresh_data, use_container_width=True)
         if st.button("Logout", use_container_width=True):
-            st.session_state["authentication_status"] = False; st.rerun()
+            st.session_state.clear(); st.rerun()
 
     st.session_state.df = get_jotform_submissions()
     is_empty = st.session_state.df.empty
@@ -284,7 +293,7 @@ def main_app():
                 sid = opts[sel_key]
                 row = st.session_state.df[st.session_state.df["SubmissionID"]==sid].iloc[0]
                 can_edit = (st.session_state['role'] == 'admin') or (row['AssignedTo'] == st.session_state['name'])
-                if not can_edit: st.warning("🔒 You do not have permission to edit this ticket because it is not assigned to you.", icon="⚠️")
+                if not can_edit: st.warning("🔒 You do not have permission to edit this ticket.", icon="⚠️")
                 c1,c2 = st.columns(2)
                 with c1:
                     current_assignee = row.get("AssignedTo"); assignee_index = SALES_TEAM.index(current_assignee) if current_assignee in SALES_TEAM else 0
@@ -298,7 +307,7 @@ def main_app():
                 next_action_date_val = row['NextActionDate'].to_pydatetime().date() if pd.notna(row['NextActionDate']) else None
                 new_next_action_date = c3.date_input("Next Action Date", value=next_action_date_val, key=f"edit_nad_{sid}", disabled=not can_edit)
                 new_next_action = c4.text_area("Next Action", value=row.get("NextAction") or "", key=f"edit_na_{sid}", disabled=not can_edit, height=100)
-                new_notes = st.text_area("Notes", value=row.get("Notes") or "", key=f"edit_notes_{sid}", help="A history entry will be automatically added if you change the status.", disabled=not can_edit, height=100)
+                new_notes = st.text_area("Notes", value=row.get("Notes") or "", key=f"edit_notes_{sid}", help="A history entry will be automatically added.", disabled=not can_edit, height=100)
                 col_save, col_delete = st.columns([1,1])
                 with col_save:
                     if st.button("Save Changes", use_container_width=True, disabled=not can_edit):
@@ -330,8 +339,6 @@ def main_app():
             if v.empty: st.warning("No tickets found in the selected date range.")
             else:
                 kpi_bar(v); st.markdown("---")
-                
-                # --- KPI Metrics ---
                 col1, col2 = st.columns(2)
                 with col1:
                     st.subheader("📈 Conversion Rate")
@@ -350,8 +357,6 @@ def main_app():
                         st.metric("Avg. Survey to Install", f"{avg_duration:.1f} Days")
                     else: st.info("No tickets completed the full process in this period.")
                 st.markdown("---")
-
-                # --- NEW: Interactive Charts ---
                 st.subheader("📊 Visual Analytics")
                 c1, c2 = st.columns(2)
                 with c1:
@@ -364,13 +369,11 @@ def main_app():
                     source_counts.columns = ['ContactSource', 'Count']
                     fig_source = px.pie(source_counts, names='ContactSource', values='Count', title='Leads by Contact Source', color_discrete_sequence=px.colors.qualitative.Pastel)
                     st.plotly_chart(fig_source, use_container_width=True)
-
                 st.markdown("---")
                 st.subheader("⏳ Leads Created Over Time")
                 leads_over_time = v.set_index('CreatedAt').resample('D').size().reset_index(name='Count')
                 fig_time = px.line(leads_over_time, x='CreatedAt', y='Count', title='Daily Lead Creation')
                 st.plotly_chart(fig_time, use_container_width=True)
-
 
     st.markdown("<hr/>", unsafe_allow_html=True)
     st.caption("Powered by Pioneer Broadband | Internal Use Only")
