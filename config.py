@@ -55,7 +55,9 @@ FIELD_ID = {
     "scheduled_date": 14,
     "installed_date": 15,
     "waiting_on_customer_date": 16,
-    "assigned_to": 20, # <-- IMPORTANT: Replace 20 with your new Field ID
+    "assigned_to": 20,
+    "next_action_date": 21, # <-- IMPORTANT: Replace 21 with your new Date ID
+    "next_action": 22,      # <-- IMPORTANT: Replace 22 with your new Text Area ID
 }
 
 STATUS_LIST = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer","Lost"]
