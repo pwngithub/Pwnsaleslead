@@ -5,32 +5,38 @@
 API_KEY = "22179825a79dba61013e4fc3b9d30fa4"
 FORM_ID = "252598168633065"
 
-# --- NEW: User Authentication ---
+# --- User Authentication with Roles ---
 # For a real application, use st.secrets for this information
 USERS = {
     "Megan": {
         "name": "Megan",
-        "password": "30mx,a&a" 
+        "password": "30mx,a&a",
+        "role": "admin"
     },
     "Karter": {
         "name": "Karter",
-        "password": "30mx,a&a"
+        "password": "30mx,a&a",
+        "role": "user"
     },
     "BJ": {
         "name": "Bj",
-        "password": "30mx,a&a"
+        "password": "30mx,a&a",
+        "role": "admin"
     },
-    "Gillain": {
+    "Gillian": {
         "name": "Gillian",
-        "password": "30mx,a&a"
-        },
+        "password": "30mx,a&a",
+        "role": "user"
+    },
     "Gabby": {
         "name": "Gabby",
-        "password": "30mx,a&a"
-        },
+        "password": "30mx,a&a",
+        "role": "user"
+    },
     "Billy": {
         "name": "Billy",
-        "password": "30mx,a&a"
+        "password": "30mx,a&a",
+        "role": "user"
     }
 }
 # --------------------------------
