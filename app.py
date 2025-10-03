@@ -2,7 +2,7 @@
 # Live JotForm integration, KPI, auto-dating, and history
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import requests
 import config # Import the config file
 import re
@@ -34,7 +34,7 @@ STATUS_TO_DATE_FIELD = {
 }
 # -----------------
 
-# --- JOTFORM API FUNCTIONS ---
+# --- JOTFORM API FUNCTIONS and HELPERS (No changes in this section) ---
 @st.cache_data(ttl=300)
 def get_jotform_submissions():
     try:
@@ -99,8 +99,6 @@ def delete_jotform_submission(submission_id):
         response = requests.delete(url); response.raise_for_status(); return True
     except requests.exceptions.RequestException as e:
         st.error(f"Error deleting ticket {submission_id}: {e}"); return False
-
-# --- CALLBACK & HELPER FUNCTIONS ---
 def refresh_data():
     st.cache_data.clear(); st.rerun()
 def calculate_status_durations(df):
@@ -230,6 +228,15 @@ def main_app():
             st.info("There are no tickets to display.")
         else:
             st.dataframe(view_df[["SubmissionID","Name","AssignedTo","ContactSource","Status","TypeOfService","LostReason","CreatedAt","LastUpdated"]], use_container_width=True)
+            
+            # --- NEW: Export to CSV Button ---
+            csv = view_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download as CSV",
+                data=csv,
+                file_name=f"sales_leads_{datetime.now().strftime('%Y-%m-%d')}.csv",
+                mime="text/csv",
+            )
 
     with tab_add:
         st.subheader("Add Ticket")
@@ -304,46 +311,77 @@ def main_app():
 
     with tab_kpi:
         st.subheader("KPI & Lifecycle Dashboard (All Tickets)")
-        # THIS TAB NOW ALWAYS USES THE FULL, UNFILTERED DATAFRAME
         if is_empty:
             st.info("There is no data for the KPI dashboard.")
         else:
-            v = st.session_state.df.copy() # Use the main dataframe, not the filtered view_df
-            kpi_bar(v)
+            # --- NEW: Date Range Filter ---
+            st.markdown("#### Filter by Date Created")
+            c1, c2 = st.columns(2)
+            start_date = c1.date_input("Start Date", value=datetime.now() - timedelta(days=90))
+            end_date = c2.date_input("End Date", value=datetime.now())
+
+            # Convert to timezone-aware datetime objects for comparison
+            start_datetime = pd.to_datetime(start_date).tz_localize('UTC')
+            end_datetime = (pd.to_datetime(end_date) + timedelta(days=1)).tz_localize('UTC')
+
+            # Use the original, unfiltered dataframe and filter it by date
+            v = st.session_state.df[(st.session_state.df['CreatedAt'] >= start_datetime) & (st.session_state.df['CreatedAt'] < end_datetime)].copy()
+            
             st.markdown("---")
-            st.subheader("⏱️ Process Duration")
-            installed_tickets = v[v['InstalledDate'].notna() & v['SurveyScheduledDate'].notna()].copy()
-            if not installed_tickets.empty:
-                installed_tickets['Duration'] = (installed_tickets['InstalledDate'] - installed_tickets['SurveyScheduledDate']).dt.days
-                avg_duration = installed_tickets['Duration'].mean()
-                st.metric("Average Time from Survey Scheduled to Installed", f"{avg_duration:.1f} Days")
-                with st.expander("Show Details"):
-                    st.dataframe(installed_tickets[['Name', 'SurveyScheduledDate', 'InstalledDate', 'Duration']], use_container_width=True)
+
+            if v.empty:
+                st.warning("No tickets found in the selected date range.")
             else:
-                st.info("No tickets have completed the full 'Survey Scheduled' to 'Installed' process yet.")
-            st.markdown("---")
-            st.subheader("📊 Average Time in Each Status")
-            duration_df = calculate_status_durations(v)
-            if not duration_df.empty:
-                avg_status_duration = duration_df.groupby('Status')['Duration (Days)'].mean().reset_index()
-                avg_status_duration['Duration (Days)'] = avg_status_duration['Duration (Days)'].round(1)
-                st.dataframe(avg_status_duration.sort_values("Duration (Days)", ascending=False), use_container_width=True)
-            else:
-                st.info("Not enough status change history to calculate durations.")
-            st.markdown("---")
-            st.subheader("⏳ Age of Open Tickets")
-            open_tickets = v[~v['Status'].isin(['Installed', 'Lost'])].copy()
-            if not open_tickets.empty:
-                now_utc = datetime.now(timezone.utc)
-                open_tickets['Age (Days)'] = (now_utc - open_tickets['CreatedAt']).dt.days
-                st.dataframe(open_tickets[['Name', 'Status', 'AssignedTo', 'Age (Days)']].sort_values('Age (Days)', ascending=False), use_container_width=True)
-            else:
-                st.info("There are no open tickets.")
+                kpi_bar(v)
+                st.markdown("---")
+
+                # --- NEW: Conversion Rate and Process Duration in columns ---
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("📈 Conversion Rate")
+                    installed_count = (v['Status'] == 'Installed').sum()
+                    lost_count = (v['Status'] == 'Lost').sum()
+                    total_resolved = installed_count + lost_count
+                    if total_resolved > 0:
+                        conversion_rate = (installed_count / total_resolved) * 100
+                        st.metric("Lead Conversion Rate", f"{conversion_rate:.1f}%")
+                        st.write(f"Based on **{total_resolved}** resolved tickets (__{installed_count} Installed / {lost_count} Lost__) in this period.")
+                    else:
+                        st.info("No tickets were resolved (Installed or Lost) in this period.")
+                
+                with col2:
+                    st.subheader("⏱️ Process Duration")
+                    installed_tickets = v[v['InstalledDate'].notna() & v['SurveyScheduledDate'].notna()].copy()
+                    if not installed_tickets.empty:
+                        installed_tickets['Duration'] = (installed_tickets['InstalledDate'] - installed_tickets['SurveyScheduledDate']).dt.days
+                        avg_duration = installed_tickets['Duration'].mean()
+                        st.metric("Avg. Survey to Install", f"{avg_duration:.1f} Days")
+                    else:
+                        st.info("No tickets completed the full process in this period.")
+
+                st.markdown("---")
+                
+                st.subheader("📊 Average Time in Each Status")
+                duration_df = calculate_status_durations(v)
+                if not duration_df.empty:
+                    avg_status_duration = duration_df.groupby('Status')['Duration (Days)'].mean().reset_index()
+                    avg_status_duration['Duration (Days)'] = avg_status_duration['Duration (Days)'].round(1)
+                    st.dataframe(avg_status_duration.sort_values("Duration (Days)", ascending=False), use_container_width=True)
+                else:
+                    st.info("Not enough history to calculate status durations in this period.")
+
+                st.markdown("---")
+                st.subheader("⏳ Age of Open Tickets")
+                open_tickets = v[~v['Status'].isin(['Installed', 'Lost'])].copy()
+                if not open_tickets.empty:
+                    now_utc = datetime.now(timezone.utc)
+                    open_tickets['Age (Days)'] = (now_utc - open_tickets['CreatedAt']).dt.days
+                    st.dataframe(open_tickets[['Name', 'Status', 'AssignedTo', 'Age (Days)']].sort_values('Age (Days)', ascending=False), use_container_width=True)
+                else:
+                    st.info("There were no open tickets in this period.")
 
     st.markdown("<hr/>", unsafe_allow_html=True)
     st.caption("Powered by Pioneer Broadband | Internal Use Only")
 
 if __name__ == "__main__":
-    if 'confirm_delete' not in st.session_state:
-        st.session_state['confirm_delete'] = None
     main_app()
