@@ -6,6 +6,7 @@ from datetime import datetime, timezone, timedelta, date
 import requests
 import config # Import the config file
 import re
+import plotly.express as px # NEW: Import Plotly
 
 # --- CONSTANTS ---
 st.set_page_config(page_title="Pioneer Sales Lead App", page_icon="📶", layout="wide")
@@ -177,7 +178,6 @@ def main_app():
     if view_mode == "My Tickets":
         view_df = st.session_state.df[st.session_state.df['AssignedTo'] == st.session_state['name']]
     
-    # --- NEW: Added "Tasks" Tab ---
     tab_tasks, tab_pipe, tab_all, tab_add, tab_edit, tab_kpi = st.tabs(["✅ Tasks", "🧩 Pipeline View","📋 All Tickets","➕ Add Ticket","✏️ Edit Ticket","📈 KPI"])
     
     if is_empty and view_mode == "All Tickets":
@@ -186,28 +186,20 @@ def main_app():
     with tab_tasks:
         st.subheader(f"Tasks for {view_mode}")
         tasks_df = view_df[view_df['NextActionDate'].notna()].copy()
-        
         if tasks_df.empty:
             st.info("No tickets with a 'Next Action Date' found in this view.")
         else:
             today = pd.to_datetime(date.today())
             tasks_df['DaysUntil'] = (tasks_df['NextActionDate'] - today).dt.days
-
             overdue = tasks_df[tasks_df['DaysUntil'] < 0]
             due_today = tasks_df[tasks_df['DaysUntil'] == 0]
             upcoming = tasks_df[tasks_df['DaysUntil'] > 0]
-            
             st.error(f"Overdue Tasks ({len(overdue)})", icon="🔥")
-            if not overdue.empty:
-                st.dataframe(overdue[['Name', 'AssignedTo', 'NextActionDate', 'NextAction']].sort_values('NextActionDate'), use_container_width=True)
-
+            if not overdue.empty: st.dataframe(overdue[['Name', 'AssignedTo', 'NextActionDate', 'NextAction']].sort_values('NextActionDate'), use_container_width=True)
             st.warning(f"Tasks Due Today ({len(due_today)})", icon="❗")
-            if not due_today.empty:
-                st.dataframe(due_today[['Name', 'AssignedTo', 'NextActionDate', 'NextAction']], use_container_width=True)
-
+            if not due_today.empty: st.dataframe(due_today[['Name', 'AssignedTo', 'NextActionDate', 'NextAction']], use_container_width=True)
             st.success(f"Upcoming Tasks ({len(upcoming)})", icon="🗓️")
-            if not upcoming.empty:
-                st.dataframe(upcoming[['Name', 'AssignedTo', 'NextActionDate', 'NextAction']].sort_values('NextActionDate'), use_container_width=True)
+            if not upcoming.empty: st.dataframe(upcoming[['Name', 'AssignedTo', 'NextActionDate', 'NextAction']].sort_values('NextActionDate'), use_container_width=True)
 
     with tab_pipe:
         st.subheader("Pipeline")
@@ -251,13 +243,11 @@ def main_app():
             status = c1.selectbox("Status *", [""] + STATUS_LIST)
             assigned_to = c2.selectbox("Assigned To *", [""] + SALES_TEAM, index=SALES_TEAM.index(st.session_state['name']) + 1 if st.session_state['name'] in SALES_TEAM else 0)
             notes = st.text_area("Notes", height=100)
-            
             st.markdown("##### Task / Follow-up")
             c3, c4 = st.columns(2)
             next_action_date = c3.date_input("Next Action Date", value=None)
             next_action = c4.text_area("Next Action", height=100)
             lost = st.text_input("Lost Reason")
-            
             if st.form_submit_button("Create Ticket"):
                 miss = [n for n,vv in [("First Name",first),("Last Name",last),("Source",source),("Status",status),("Service",service),("Assigned To", assigned_to)] if not vv]
                 if miss: st.error("Missing: " + ", ".join(miss))
@@ -295,7 +285,6 @@ def main_app():
                 row = st.session_state.df[st.session_state.df["SubmissionID"]==sid].iloc[0]
                 can_edit = (st.session_state['role'] == 'admin') or (row['AssignedTo'] == st.session_state['name'])
                 if not can_edit: st.warning("🔒 You do not have permission to edit this ticket because it is not assigned to you.", icon="⚠️")
-                
                 c1,c2 = st.columns(2)
                 with c1:
                     current_assignee = row.get("AssignedTo"); assignee_index = SALES_TEAM.index(current_assignee) if current_assignee in SALES_TEAM else 0
@@ -304,15 +293,12 @@ def main_app():
                 with c2:
                     new_service = st.selectbox("Type of Service", SERVICE_TYPES, index=SERVICE_TYPES.index(row["TypeOfService"]) if row["TypeOfService"] in SERVICE_TYPES else 0, key=f"edit_service_{sid}", disabled=not can_edit)
                     new_lost = st.text_input("Lost Reason", value=row.get("LostReason") or "", key=f"edit_lost_{sid}", disabled=not can_edit)
-                
                 st.markdown("##### Task / Follow-up")
                 c3, c4 = st.columns(2)
                 next_action_date_val = row['NextActionDate'].to_pydatetime().date() if pd.notna(row['NextActionDate']) else None
                 new_next_action_date = c3.date_input("Next Action Date", value=next_action_date_val, key=f"edit_nad_{sid}", disabled=not can_edit)
                 new_next_action = c4.text_area("Next Action", value=row.get("NextAction") or "", key=f"edit_na_{sid}", disabled=not can_edit, height=100)
-
                 new_notes = st.text_area("Notes", value=row.get("Notes") or "", key=f"edit_notes_{sid}", help="A history entry will be automatically added if you change the status.", disabled=not can_edit, height=100)
-                
                 col_save, col_delete = st.columns([1,1])
                 with col_save:
                     if st.button("Save Changes", use_container_width=True, disabled=not can_edit):
@@ -344,6 +330,8 @@ def main_app():
             if v.empty: st.warning("No tickets found in the selected date range.")
             else:
                 kpi_bar(v); st.markdown("---")
+                
+                # --- KPI Metrics ---
                 col1, col2 = st.columns(2)
                 with col1:
                     st.subheader("📈 Conversion Rate")
@@ -351,8 +339,7 @@ def main_app():
                     total_resolved = installed_count + lost_count
                     if total_resolved > 0:
                         conversion_rate = (installed_count / total_resolved) * 100
-                        st.metric("Lead Conversion Rate", f"{conversion_rate:.1f}%")
-                        st.write(f"Based on **{total_resolved}** resolved tickets in this period.")
+                        st.metric("Lead Conversion Rate", f"{conversion_rate:.1f}%", help=f"Based on {total_resolved} resolved tickets.")
                     else: st.info("No tickets were resolved in this period.")
                 with col2:
                     st.subheader("⏱️ Process Duration")
@@ -363,21 +350,27 @@ def main_app():
                         st.metric("Avg. Survey to Install", f"{avg_duration:.1f} Days")
                     else: st.info("No tickets completed the full process in this period.")
                 st.markdown("---")
-                st.subheader("📊 Average Time in Each Status")
-                duration_df = calculate_status_durations(v)
-                if not duration_df.empty:
-                    avg_status_duration = duration_df.groupby('Status')['Duration (Days)'].mean().reset_index()
-                    avg_status_duration['Duration (Days)'] = avg_status_duration['Duration (Days)'].round(1)
-                    st.dataframe(avg_status_duration.sort_values("Duration (Days)", ascending=False), use_container_width=True)
-                else: st.info("Not enough history to calculate durations in this period.")
+
+                # --- NEW: Interactive Charts ---
+                st.subheader("📊 Visual Analytics")
+                c1, c2 = st.columns(2)
+                with c1:
+                    status_counts = v['Status'].value_counts().reset_index()
+                    status_counts.columns = ['Status', 'Count']
+                    fig_status = px.bar(status_counts, x='Count', y='Status', orientation='h', title='Leads by Current Status', color_discrete_sequence=px.colors.qualitative.Pastel)
+                    st.plotly_chart(fig_status, use_container_width=True)
+                with c2:
+                    source_counts = v['ContactSource'].value_counts().reset_index()
+                    source_counts.columns = ['ContactSource', 'Count']
+                    fig_source = px.pie(source_counts, names='ContactSource', values='Count', title='Leads by Contact Source', color_discrete_sequence=px.colors.qualitative.Pastel)
+                    st.plotly_chart(fig_source, use_container_width=True)
+
                 st.markdown("---")
-                st.subheader("⏳ Age of Open Tickets")
-                open_tickets = v[~v['Status'].isin(['Installed', 'Lost'])].copy()
-                if not open_tickets.empty:
-                    now_utc = datetime.now(timezone.utc)
-                    open_tickets['Age (Days)'] = (now_utc - open_tickets['CreatedAt']).dt.days
-                    st.dataframe(open_tickets[['Name', 'Status', 'AssignedTo', 'Age (Days)']].sort_values('Age (Days)', ascending=False), use_container_width=True)
-                else: st.info("There were no open tickets in this period.")
+                st.subheader("⏳ Leads Created Over Time")
+                leads_over_time = v.set_index('CreatedAt').resample('D').size().reset_index(name='Count')
+                fig_time = px.line(leads_over_time, x='CreatedAt', y='Count', title='Daily Lead Creation')
+                st.plotly_chart(fig_time, use_container_width=True)
+
 
     st.markdown("<hr/>", unsafe_allow_html=True)
     st.caption("Powered by Pioneer Broadband | Internal Use Only")
