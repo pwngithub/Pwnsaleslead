@@ -215,4 +215,135 @@ def main_app():
                     subset = view_df[view_df["Status"]==status]
                     if not subset.empty:
                         for _, row in subset.sort_values("LastUpdated", ascending=False).iterrows():
-                            can_edit = (st.session_state['role'] == 'admin') or (row['AssignedTo'] == st.session_state['
+                            can_edit = (st.session_state['role'] == 'admin') or (row['AssignedTo'] == st.session_state['name'])
+                            lock_icon = "" if can_edit else "🔒"
+                            expander_title = f"{row['Name']} · {row.get('AssignedTo', 'Unassigned')} {lock_icon}"
+                            with st.expander(expander_title, expanded=False):
+                                st.caption(f"Updated: {row['LastUpdated'].strftime('%Y-%m-%d %H:%M')}")
+                                st.write(row.get("Notes",""))
+                                widget_key = f"mv_{row['SubmissionID']}"
+                                st.selectbox("Move to", STATUS_LIST, index=STATUS_LIST.index(status), key=widget_key, on_change=update_ticket_status, args=(row['SubmissionID'], widget_key), disabled=not can_edit)
+
+    with tab_all:
+        st.subheader("All Tickets")
+        if view_df.empty:
+            st.info("There are no tickets to display.")
+        else:
+            st.dataframe(view_df[["SubmissionID","Name","AssignedTo","ContactSource","Status","TypeOfService","LostReason","CreatedAt","LastUpdated"]], use_container_width=True)
+
+    with tab_add:
+        st.subheader("Add Ticket")
+        with st.form("add"):
+            c1, c2 = st.columns(2)
+            first = c1.text_input("First Name *"); last = c2.text_input("Last Name *")
+            source = c1.selectbox("Contact Source *", ["", "Email", "Phone Call", "Walk In", "Social Media", "In Person"])
+            service = c2.selectbox("Type of Service *", [""] + SERVICE_TYPES)
+            status = c1.selectbox("Status *", [""] + STATUS_LIST)
+            assigned_to = c2.selectbox("Assigned To *", [""] + SALES_TEAM, index=SALES_TEAM.index(st.session_state['name']) + 1 if st.session_state['name'] in SALES_TEAM else 0)
+            notes = st.text_area("Notes")
+            lost = st.text_input("Lost Reason")
+            if st.form_submit_button("Create Ticket"):
+                miss = [n for n,vv in [("First Name",first),("Last Name",last),("Source",source),("Status",status),("Service",service),("Assigned To", assigned_to)] if not vv]
+                if miss:
+                    st.error("Missing: " + ", ".join(miss))
+                else:
+                    name_field_str = config.FIELD_ID.get('name_first', ''); name_id_match = re.search(r'\d+', name_field_str)
+                    if name_id_match:
+                        name_id = name_id_match.group()
+                        payload = {
+                            f'submission[{name_id}][first]': first, f'submission[{name_id}][last]': last,
+                            f'submission[{str(config.FIELD_ID["source"])}]': source, f'submission[{str(config.FIELD_ID["status"])}]': status,
+                            f'submission[{str(config.FIELD_ID["service_type"])}]': service, f'submission[{str(config.FIELD_ID["notes"])}]': notes,
+                            f'submission[{str(config.FIELD_ID["lost_reason"])}]': lost, f'submission[{str(config.FIELD_ID["assigned_to"])}]': assigned_to,
+                        }
+                        if status in STATUS_TO_DATE_FIELD:
+                            date_field_key = STATUS_TO_DATE_FIELD[status]; date_field_id = config.FIELD_ID[date_field_key]; now_local = datetime.now()
+                            payload.update({f'submission[{date_field_id}][month]': now_local.month, f'submission[{date_field_id}][day]': now_local.day, f'submission[{date_field_id}][year]': now_local.year})
+                        if add_jotform_submission(payload):
+                            st.success("Ticket created successfully."); refresh_data()
+    
+    with tab_edit:
+        st.subheader("Edit Ticket")
+        if is_empty:
+            st.info("There are no tickets to edit.")
+        else:
+            opts = {f"{r['Name']} · {r.get('AssignedTo', 'Unassigned')} ({r['SubmissionID']})": r["SubmissionID"] for _, r in st.session_state.df.sort_values("Name").iterrows()}
+            sel_key = st.selectbox("Select a Ticket to Edit", list(opts.keys()), key="edit_sel")
+            if sel_key:
+                sid = opts[sel_key]
+                row = st.session_state.df[st.session_state.df["SubmissionID"]==sid].iloc[0]
+                can_edit = (st.session_state['role'] == 'admin') or (row['AssignedTo'] == st.session_state['name'])
+                if not can_edit:
+                    st.warning("🔒 You do not have permission to edit this ticket because it is not assigned to you.", icon="⚠️")
+                c1,c2 = st.columns(2)
+                with c1:
+                    current_assignee = row.get("AssignedTo"); assignee_index = SALES_TEAM.index(current_assignee) if current_assignee in SALES_TEAM else 0
+                    new_assigned_to = st.selectbox("Assigned To", SALES_TEAM, index=assignee_index, key=f"edit_assign_{sid}", disabled=not can_edit)
+                    new_status = st.selectbox("Status", STATUS_LIST, index=STATUS_LIST.index(row["Status"]) if row["Status"] in STATUS_LIST else 0, key=f"edit_status_{sid}", disabled=not can_edit)
+                with c2:
+                    new_service = st.selectbox("Type of Service", SERVICE_TYPES, index=SERVICE_TYPES.index(row["TypeOfService"]) if row["TypeOfService"] in SERVICE_TYPES else 0, key=f"edit_service_{sid}", disabled=not can_edit)
+                    new_lost = st.text_input("Lost Reason", value=row.get("LostReason") or "", key=f"edit_lost_{sid}", disabled=not can_edit)
+                new_notes = st.text_area("Notes", value=row.get("Notes") or "", key=f"edit_notes_{sid}", help="A history entry will be automatically added if you change the status.", disabled=not can_edit)
+                col_save, col_delete = st.columns([1,1])
+                with col_save:
+                    if st.button("Save Changes", use_container_width=True, disabled=not can_edit):
+                        update_ticket_details(sid, new_status, new_service, new_lost, new_notes, new_assigned_to)
+                with col_delete:
+                    if st.button("❌ Delete Ticket", type="primary", use_container_width=True, disabled=not can_edit):
+                        st.session_state['confirm_delete'] = sid
+                if st.session_state.get('confirm_delete') == sid:
+                    st.warning(f"Are you sure you want to delete ticket for {row['Name']} ({sid})?")
+                    c_yes, c_no = st.columns(2)
+                    with c_yes:
+                        if st.button("Yes, Delete Permanently", type="primary", use_container_width=True):
+                            if delete_jotform_submission(sid):
+                                st.success(f"Ticket {sid} has been permanently deleted."); st.session_state['confirm_delete'] = None; refresh_data()
+                    with c_no:
+                        if st.button("No, Keep It", use_container_width=True):
+                            st.session_state['confirm_delete'] = None
+
+    with tab_kpi:
+        st.subheader("KPI & Lifecycle Dashboard (All Tickets)")
+        # THIS TAB NOW ALWAYS USES THE FULL, UNFILTERED DATAFRAME
+        if is_empty:
+            st.info("There is no data for the KPI dashboard.")
+        else:
+            v = st.session_state.df.copy() # Use the main dataframe, not the filtered view_df
+            kpi_bar(v)
+            st.markdown("---")
+            st.subheader("⏱️ Process Duration")
+            installed_tickets = v[v['InstalledDate'].notna() & v['SurveyScheduledDate'].notna()].copy()
+            if not installed_tickets.empty:
+                installed_tickets['Duration'] = (installed_tickets['InstalledDate'] - installed_tickets['SurveyScheduledDate']).dt.days
+                avg_duration = installed_tickets['Duration'].mean()
+                st.metric("Average Time from Survey Scheduled to Installed", f"{avg_duration:.1f} Days")
+                with st.expander("Show Details"):
+                    st.dataframe(installed_tickets[['Name', 'SurveyScheduledDate', 'InstalledDate', 'Duration']], use_container_width=True)
+            else:
+                st.info("No tickets have completed the full 'Survey Scheduled' to 'Installed' process yet.")
+            st.markdown("---")
+            st.subheader("📊 Average Time in Each Status")
+            duration_df = calculate_status_durations(v)
+            if not duration_df.empty:
+                avg_status_duration = duration_df.groupby('Status')['Duration (Days)'].mean().reset_index()
+                avg_status_duration['Duration (Days)'] = avg_status_duration['Duration (Days)'].round(1)
+                st.dataframe(avg_status_duration.sort_values("Duration (Days)", ascending=False), use_container_width=True)
+            else:
+                st.info("Not enough status change history to calculate durations.")
+            st.markdown("---")
+            st.subheader("⏳ Age of Open Tickets")
+            open_tickets = v[~v['Status'].isin(['Installed', 'Lost'])].copy()
+            if not open_tickets.empty:
+                now_utc = datetime.now(timezone.utc)
+                open_tickets['Age (Days)'] = (now_utc - open_tickets['CreatedAt']).dt.days
+                st.dataframe(open_tickets[['Name', 'Status', 'AssignedTo', 'Age (Days)']].sort_values('Age (Days)', ascending=False), use_container_width=True)
+            else:
+                st.info("There are no open tickets.")
+
+    st.markdown("<hr/>", unsafe_allow_html=True)
+    st.caption("Powered by Pioneer Broadband | Internal Use Only")
+
+if __name__ == "__main__":
+    if 'confirm_delete' not in st.session_state:
+        st.session_state['confirm_delete'] = None
+    main_app()
