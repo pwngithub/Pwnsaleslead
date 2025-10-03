@@ -2,7 +2,7 @@
 # Live JotForm integration, KPI, auto-dating, and history
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 import requests
 import config # Import the config file
 import re
@@ -17,19 +17,13 @@ SERVICE_TYPES = config.SERVICE_TYPES
 SALES_TEAM = [details["name"] for details in config.USERS.values()]
 
 COLORS = {
-    "Survey Scheduled": "#3b82f6",
-    "Survey Completed": "#fbbf24",
-    "Scheduled": "#fb923c",
-    "Installed": "#22c55e",
-    "Waiting on Customer": "#a855f7",
-    "Lost": "#ef4444"
+    "Survey Scheduled": "#3b82f6", "Survey Completed": "#fbbf24", "Scheduled": "#fb923c",
+    "Installed": "#22c55e", "Waiting on Customer": "#a855f7", "Lost": "#ef4444"
 }
 
 STATUS_TO_DATE_FIELD = {
-    "Survey Scheduled": "survey_scheduled_date",
-    "Survey Completed": "survey_completed_date",
-    "Scheduled": "scheduled_date",
-    "Installed": "installed_date",
+    "Survey Scheduled": "survey_scheduled_date", "Survey Completed": "survey_completed_date",
+    "Scheduled": "scheduled_date", "Installed": "installed_date",
     "Waiting on Customer": "waiting_on_customer_date",
 }
 # -----------------
@@ -39,28 +33,24 @@ STATUS_TO_DATE_FIELD = {
 def get_jotform_submissions():
     try:
         url = f"https://api.jotform.com/form/{config.FORM_ID}/submissions?apiKey={config.API_KEY}&limit=1000"
-        response = requests.get(url)
-        response.raise_for_status()
+        response = requests.get(url); response.raise_for_status()
         data = response.json().get('content', [])
         records = []
         for sub in data:
             if sub.get('status') == 'ACTIVE':
                 answers = sub.get('answers', {})
                 def get_ans(qid):
-                    ans_dict = answers.get(str(qid))
-                    return ans_dict.get('answer', '') if ans_dict else ''
+                    ans_dict = answers.get(str(qid)); return ans_dict.get('answer', '') if ans_dict else ''
                 def get_date_ans(qid):
                     date_ans = get_ans(qid)
                     if isinstance(date_ans, dict):
                         date_str = f"{date_ans.get('year')}-{date_ans.get('month')}-{date_ans.get('day')}"
                         return pd.to_datetime(date_str, errors='coerce')
                     return pd.to_datetime(date_ans, errors='coerce')
-                name_field_str = config.FIELD_ID.get('name_first', '')
-                name_id_match = re.search(r'\d+', name_field_str)
+                name_field_str = config.FIELD_ID.get('name_first', ''); name_id_match = re.search(r'\d+', name_field_str)
                 first_name, last_name = '', ''
                 if name_id_match:
-                    name_id = name_id_match.group()
-                    name_ans = get_ans(name_id)
+                    name_id = name_id_match.group(); name_ans = get_ans(name_id)
                     first_name = name_ans.get('first', '') if isinstance(name_ans, dict) else ''
                     last_name = name_ans.get('last', '') if isinstance(name_ans, dict) else ''
                 records.append({
@@ -72,15 +62,16 @@ def get_jotform_submissions():
                     "LastUpdated": pd.to_datetime(sub.get('updated_at'), utc=True) if sub.get('updated_at') else pd.to_datetime(sub.get('created_at'), utc=True),
                     "SurveyScheduledDate": get_date_ans(config.FIELD_ID['survey_scheduled_date']),
                     "InstalledDate": get_date_ans(config.FIELD_ID['installed_date']),
+                    "NextActionDate": get_date_ans(config.FIELD_ID['next_action_date']),
+                    "NextAction": get_ans(config.FIELD_ID['next_action']),
                 })
         df = pd.DataFrame(records)
-        for col in ["SubmissionID", "Name", "Status", "CreatedAt", "AssignedTo"]:
+        for col in ["SubmissionID", "Name", "Status", "CreatedAt", "AssignedTo", "NextActionDate"]:
             if col not in df.columns:
-                df[col] = pd.Series(dtype='object' if col != "CreatedAt" else 'datetime64[ns, UTC]')
+                df[col] = pd.Series(dtype='object' if 'Date' not in col else 'datetime64[ns]')
         return df
     except Exception as e:
-        st.error(f"An error occurred while processing JotForm data: {e}")
-        return pd.DataFrame()
+        st.error(f"An error occurred while processing JotForm data: {e}"); return pd.DataFrame()
 def update_jotform_submission(submission_id, payload):
     try:
         url = f"https://api.jotform.com/submission/{submission_id}?apiKey={config.API_KEY}"
@@ -133,13 +124,18 @@ def update_ticket_status(submission_id, widget_key):
             payload.update({f'submission[{date_field_id}][month]': now_local.month, f'submission[{date_field_id}][day]': now_local.day, f'submission[{date_field_id}][year]': now_local.year})
         if update_jotform_submission(submission_id, payload):
             st.success(f"Moved ticket {submission_id} to {new_status}"); refresh_data()
-def update_ticket_details(sid, new_status, new_service, new_lost, new_notes, new_assigned_to):
+def update_ticket_details(sid, new_status, new_service, new_lost, new_notes, new_assigned_to, next_action_date, next_action):
     row = st.session_state.df[st.session_state.df["SubmissionID"] == sid].iloc[0]
     payload = {
         f'submission[{config.FIELD_ID["service_type"]}]': new_service,
         f'submission[{config.FIELD_ID["lost_reason"]}]': new_lost,
         f'submission[{config.FIELD_ID["assigned_to"]}]': new_assigned_to,
+        f'submission[{config.FIELD_ID["next_action"]}]': next_action,
     }
+    if next_action_date:
+        payload[f'submission[{config.FIELD_ID["next_action_date"]}][month]'] = next_action_date.month
+        payload[f'submission[{config.FIELD_ID["next_action_date"]}][day]'] = next_action_date.day
+        payload[f'submission[{config.FIELD_ID["next_action_date"]}][year]'] = next_action_date.year
     if row['Status'] != new_status:
         payload[f'submission[{config.FIELD_ID["status"]}]'] = new_status
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
@@ -152,19 +148,12 @@ def update_ticket_details(sid, new_status, new_service, new_lost, new_notes, new
         payload[f'submission[{config.FIELD_ID["notes"]}]'] = new_notes
     if update_jotform_submission(sid, payload):
         st.success(f"Ticket {sid} changes saved."); refresh_data()
-
-# --- AUTHENTICATION LOGIC ---
 def check_password():
-    st.image(LOGO, width=300)
-    st.title("Sales Lead Tracker Login")
-    username = st.text_input("Username", key="login_user")
-    password = st.text_input("Password", type="password", key="login_pass")
+    st.image(LOGO, width=300); st.title("Sales Lead Tracker Login")
+    username = st.text_input("Username", key="login_user"); password = st.text_input("Password", type="password", key="login_pass")
     if st.button("Login"):
         if username in config.USERS and config.USERS[username]["password"] == password:
-            st.session_state["authentication_status"] = True
-            st.session_state["name"] = config.USERS[username]["name"]
-            st.session_state["role"] = config.USERS[username]["role"]
-            st.rerun()
+            st.session_state.update({"authentication_status": True, "name": config.USERS[username]["name"], "role": config.USERS[username]["role"]}); st.rerun()
         else:
             st.error("😕 Username not found or password incorrect")
     
@@ -173,31 +162,52 @@ def main_app():
     if not st.session_state.get("authentication_status"):
         check_password(); return
 
-    left, mid, right = st.columns([1, 4, 1])
-    with left:
-        st.image(LOGO, use_container_width=True)
-    with mid:
-        st.title("Sales Lead Tracker")
-        st.caption(f"Welcome, {st.session_state['name']} (Role: {st.session_state['role']})")
+    left, mid, right = st.columns([1, 4, 1]);
+    with left: st.image(LOGO, use_container_width=True)
+    with mid: st.title("Sales Lead Tracker"); st.caption(f"Welcome, {st.session_state['name']} (Role: {st.session_state['role']})")
     with right:
         st.button("🔄 Refresh Data", on_click=refresh_data, use_container_width=True)
         if st.button("Logout", use_container_width=True):
-            st.session_state["authentication_status"] = False
-            st.rerun()
+            st.session_state["authentication_status"] = False; st.rerun()
 
     st.session_state.df = get_jotform_submissions()
     is_empty = st.session_state.df.empty
-    
     view_mode = st.radio("View Tickets", ["My Tickets", "All Tickets"], index=1, horizontal=True)
-    
     view_df = st.session_state.df
     if view_mode == "My Tickets":
         view_df = st.session_state.df[st.session_state.df['AssignedTo'] == st.session_state['name']]
     
-    tab_pipe, tab_all, tab_add, tab_edit, tab_kpi = st.tabs(["🧩 Pipeline View","📋 All Tickets","➕ Add Ticket","✏️ Edit Ticket","📈 KPI"])
+    # --- NEW: Added "Tasks" Tab ---
+    tab_tasks, tab_pipe, tab_all, tab_add, tab_edit, tab_kpi = st.tabs(["✅ Tasks", "🧩 Pipeline View","📋 All Tickets","➕ Add Ticket","✏️ Edit Ticket","📈 KPI"])
     
     if is_empty and view_mode == "All Tickets":
         st.warning("No tickets found. You can create the first one in the 'Add Ticket' tab.")
+
+    with tab_tasks:
+        st.subheader(f"Tasks for {view_mode}")
+        tasks_df = view_df[view_df['NextActionDate'].notna()].copy()
+        
+        if tasks_df.empty:
+            st.info("No tickets with a 'Next Action Date' found in this view.")
+        else:
+            today = pd.to_datetime(date.today())
+            tasks_df['DaysUntil'] = (tasks_df['NextActionDate'] - today).dt.days
+
+            overdue = tasks_df[tasks_df['DaysUntil'] < 0]
+            due_today = tasks_df[tasks_df['DaysUntil'] == 0]
+            upcoming = tasks_df[tasks_df['DaysUntil'] > 0]
+            
+            st.error(f"Overdue Tasks ({len(overdue)})", icon="🔥")
+            if not overdue.empty:
+                st.dataframe(overdue[['Name', 'AssignedTo', 'NextActionDate', 'NextAction']].sort_values('NextActionDate'), use_container_width=True)
+
+            st.warning(f"Tasks Due Today ({len(due_today)})", icon="❗")
+            if not due_today.empty:
+                st.dataframe(due_today[['Name', 'AssignedTo', 'NextActionDate', 'NextAction']], use_container_width=True)
+
+            st.success(f"Upcoming Tasks ({len(upcoming)})", icon="🗓️")
+            if not upcoming.empty:
+                st.dataframe(upcoming[['Name', 'AssignedTo', 'NextActionDate', 'NextAction']].sort_values('NextActionDate'), use_container_width=True)
 
     with tab_pipe:
         st.subheader("Pipeline")
@@ -227,32 +237,30 @@ def main_app():
         if view_df.empty:
             st.info("There are no tickets to display.")
         else:
-            st.dataframe(view_df[["SubmissionID","Name","AssignedTo","ContactSource","Status","TypeOfService","LostReason","CreatedAt","LastUpdated"]], use_container_width=True)
-            
-            # --- NEW: Export to CSV Button ---
+            st.dataframe(view_df[["SubmissionID","Name","AssignedTo","ContactSource","Status","TypeOfService","NextActionDate", "LostReason","CreatedAt"]], use_container_width=True)
             csv = view_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Download as CSV",
-                data=csv,
-                file_name=f"sales_leads_{datetime.now().strftime('%Y-%m-%d')}.csv",
-                mime="text/csv",
-            )
+            st.download_button(label="📥 Download as CSV", data=csv, file_name=f"sales_leads_{datetime.now().strftime('%Y-%m-%d')}.csv", mime="text/csv")
 
     with tab_add:
         st.subheader("Add Ticket")
         with st.form("add"):
-            c1, c2 = st.columns(2)
+            c1, c2 = st.columns(2);
             first = c1.text_input("First Name *"); last = c2.text_input("Last Name *")
             source = c1.selectbox("Contact Source *", ["", "Email", "Phone Call", "Walk In", "Social Media", "In Person"])
             service = c2.selectbox("Type of Service *", [""] + SERVICE_TYPES)
             status = c1.selectbox("Status *", [""] + STATUS_LIST)
             assigned_to = c2.selectbox("Assigned To *", [""] + SALES_TEAM, index=SALES_TEAM.index(st.session_state['name']) + 1 if st.session_state['name'] in SALES_TEAM else 0)
-            notes = st.text_area("Notes")
+            notes = st.text_area("Notes", height=100)
+            
+            st.markdown("##### Task / Follow-up")
+            c3, c4 = st.columns(2)
+            next_action_date = c3.date_input("Next Action Date", value=None)
+            next_action = c4.text_area("Next Action", height=100)
             lost = st.text_input("Lost Reason")
+            
             if st.form_submit_button("Create Ticket"):
                 miss = [n for n,vv in [("First Name",first),("Last Name",last),("Source",source),("Status",status),("Service",service),("Assigned To", assigned_to)] if not vv]
-                if miss:
-                    st.error("Missing: " + ", ".join(miss))
+                if miss: st.error("Missing: " + ", ".join(miss))
                 else:
                     name_field_str = config.FIELD_ID.get('name_first', ''); name_id_match = re.search(r'\d+', name_field_str)
                     if name_id_match:
@@ -262,7 +270,14 @@ def main_app():
                             f'submission[{str(config.FIELD_ID["source"])}]': source, f'submission[{str(config.FIELD_ID["status"])}]': status,
                             f'submission[{str(config.FIELD_ID["service_type"])}]': service, f'submission[{str(config.FIELD_ID["notes"])}]': notes,
                             f'submission[{str(config.FIELD_ID["lost_reason"])}]': lost, f'submission[{str(config.FIELD_ID["assigned_to"])}]': assigned_to,
+                            f'submission[{str(config.FIELD_ID["next_action"])}]': next_action,
                         }
+                        if next_action_date:
+                            payload.update({
+                                f'submission[{config.FIELD_ID["next_action_date"]}][month]': next_action_date.month,
+                                f'submission[{config.FIELD_ID["next_action_date"]}][day]': next_action_date.day,
+                                f'submission[{config.FIELD_ID["next_action_date"]}][year]': next_action_date.year,
+                            })
                         if status in STATUS_TO_DATE_FIELD:
                             date_field_key = STATUS_TO_DATE_FIELD[status]; date_field_id = config.FIELD_ID[date_field_key]; now_local = datetime.now()
                             payload.update({f'submission[{date_field_id}][month]': now_local.month, f'submission[{date_field_id}][day]': now_local.day, f'submission[{date_field_id}][year]': now_local.year})
@@ -271,8 +286,7 @@ def main_app():
     
     with tab_edit:
         st.subheader("Edit Ticket")
-        if is_empty:
-            st.info("There are no tickets to edit.")
+        if is_empty: st.info("There are no tickets to edit.")
         else:
             opts = {f"{r['Name']} · {r.get('AssignedTo', 'Unassigned')} ({r['SubmissionID']})": r["SubmissionID"] for _, r in st.session_state.df.sort_values("Name").iterrows()}
             sel_key = st.selectbox("Select a Ticket to Edit", list(opts.keys()), key="edit_sel")
@@ -280,8 +294,8 @@ def main_app():
                 sid = opts[sel_key]
                 row = st.session_state.df[st.session_state.df["SubmissionID"]==sid].iloc[0]
                 can_edit = (st.session_state['role'] == 'admin') or (row['AssignedTo'] == st.session_state['name'])
-                if not can_edit:
-                    st.warning("🔒 You do not have permission to edit this ticket because it is not assigned to you.", icon="⚠️")
+                if not can_edit: st.warning("🔒 You do not have permission to edit this ticket because it is not assigned to you.", icon="⚠️")
+                
                 c1,c2 = st.columns(2)
                 with c1:
                     current_assignee = row.get("AssignedTo"); assignee_index = SALES_TEAM.index(current_assignee) if current_assignee in SALES_TEAM else 0
@@ -290,11 +304,19 @@ def main_app():
                 with c2:
                     new_service = st.selectbox("Type of Service", SERVICE_TYPES, index=SERVICE_TYPES.index(row["TypeOfService"]) if row["TypeOfService"] in SERVICE_TYPES else 0, key=f"edit_service_{sid}", disabled=not can_edit)
                     new_lost = st.text_input("Lost Reason", value=row.get("LostReason") or "", key=f"edit_lost_{sid}", disabled=not can_edit)
-                new_notes = st.text_area("Notes", value=row.get("Notes") or "", key=f"edit_notes_{sid}", help="A history entry will be automatically added if you change the status.", disabled=not can_edit)
+                
+                st.markdown("##### Task / Follow-up")
+                c3, c4 = st.columns(2)
+                next_action_date_val = row['NextActionDate'].to_pydatetime().date() if pd.notna(row['NextActionDate']) else None
+                new_next_action_date = c3.date_input("Next Action Date", value=next_action_date_val, key=f"edit_nad_{sid}", disabled=not can_edit)
+                new_next_action = c4.text_area("Next Action", value=row.get("NextAction") or "", key=f"edit_na_{sid}", disabled=not can_edit, height=100)
+
+                new_notes = st.text_area("Notes", value=row.get("Notes") or "", key=f"edit_notes_{sid}", help="A history entry will be automatically added if you change the status.", disabled=not can_edit, height=100)
+                
                 col_save, col_delete = st.columns([1,1])
                 with col_save:
                     if st.button("Save Changes", use_container_width=True, disabled=not can_edit):
-                        update_ticket_details(sid, new_status, new_service, new_lost, new_notes, new_assigned_to)
+                        update_ticket_details(sid, new_status, new_service, new_lost, new_notes, new_assigned_to, new_next_action_date, new_next_action)
                 with col_delete:
                     if st.button("❌ Delete Ticket", type="primary", use_container_width=True, disabled=not can_edit):
                         st.session_state['confirm_delete'] = sid
@@ -311,44 +333,27 @@ def main_app():
 
     with tab_kpi:
         st.subheader("KPI & Lifecycle Dashboard (All Tickets)")
-        if is_empty:
-            st.info("There is no data for the KPI dashboard.")
+        if is_empty: st.info("There is no data for the KPI dashboard.")
         else:
-            # --- NEW: Date Range Filter ---
             st.markdown("#### Filter by Date Created")
             c1, c2 = st.columns(2)
-            start_date = c1.date_input("Start Date", value=datetime.now() - timedelta(days=90))
-            end_date = c2.date_input("End Date", value=datetime.now())
-
-            # Convert to timezone-aware datetime objects for comparison
-            start_datetime = pd.to_datetime(start_date).tz_localize('UTC')
-            end_datetime = (pd.to_datetime(end_date) + timedelta(days=1)).tz_localize('UTC')
-
-            # Use the original, unfiltered dataframe and filter it by date
+            start_date = c1.date_input("Start Date", value=datetime.now() - timedelta(days=90)); end_date = c2.date_input("End Date", value=datetime.now())
+            start_datetime = pd.to_datetime(start_date).tz_localize('UTC'); end_datetime = (pd.to_datetime(end_date) + timedelta(days=1)).tz_localize('UTC')
             v = st.session_state.df[(st.session_state.df['CreatedAt'] >= start_datetime) & (st.session_state.df['CreatedAt'] < end_datetime)].copy()
-            
             st.markdown("---")
-
-            if v.empty:
-                st.warning("No tickets found in the selected date range.")
+            if v.empty: st.warning("No tickets found in the selected date range.")
             else:
-                kpi_bar(v)
-                st.markdown("---")
-
-                # --- NEW: Conversion Rate and Process Duration in columns ---
+                kpi_bar(v); st.markdown("---")
                 col1, col2 = st.columns(2)
                 with col1:
                     st.subheader("📈 Conversion Rate")
-                    installed_count = (v['Status'] == 'Installed').sum()
-                    lost_count = (v['Status'] == 'Lost').sum()
+                    installed_count = (v['Status'] == 'Installed').sum(); lost_count = (v['Status'] == 'Lost').sum()
                     total_resolved = installed_count + lost_count
                     if total_resolved > 0:
                         conversion_rate = (installed_count / total_resolved) * 100
                         st.metric("Lead Conversion Rate", f"{conversion_rate:.1f}%")
-                        st.write(f"Based on **{total_resolved}** resolved tickets (__{installed_count} Installed / {lost_count} Lost__) in this period.")
-                    else:
-                        st.info("No tickets were resolved (Installed or Lost) in this period.")
-                
+                        st.write(f"Based on **{total_resolved}** resolved tickets in this period.")
+                    else: st.info("No tickets were resolved in this period.")
                 with col2:
                     st.subheader("⏱️ Process Duration")
                     installed_tickets = v[v['InstalledDate'].notna() & v['SurveyScheduledDate'].notna()].copy()
@@ -356,20 +361,15 @@ def main_app():
                         installed_tickets['Duration'] = (installed_tickets['InstalledDate'] - installed_tickets['SurveyScheduledDate']).dt.days
                         avg_duration = installed_tickets['Duration'].mean()
                         st.metric("Avg. Survey to Install", f"{avg_duration:.1f} Days")
-                    else:
-                        st.info("No tickets completed the full process in this period.")
-
+                    else: st.info("No tickets completed the full process in this period.")
                 st.markdown("---")
-                
                 st.subheader("📊 Average Time in Each Status")
                 duration_df = calculate_status_durations(v)
                 if not duration_df.empty:
                     avg_status_duration = duration_df.groupby('Status')['Duration (Days)'].mean().reset_index()
                     avg_status_duration['Duration (Days)'] = avg_status_duration['Duration (Days)'].round(1)
                     st.dataframe(avg_status_duration.sort_values("Duration (Days)", ascending=False), use_container_width=True)
-                else:
-                    st.info("Not enough history to calculate status durations in this period.")
-
+                else: st.info("Not enough history to calculate durations in this period.")
                 st.markdown("---")
                 st.subheader("⏳ Age of Open Tickets")
                 open_tickets = v[~v['Status'].isin(['Installed', 'Lost'])].copy()
@@ -377,8 +377,7 @@ def main_app():
                     now_utc = datetime.now(timezone.utc)
                     open_tickets['Age (Days)'] = (now_utc - open_tickets['CreatedAt']).dt.days
                     st.dataframe(open_tickets[['Name', 'Status', 'AssignedTo', 'Age (Days)']].sort_values('Age (Days)', ascending=False), use_container_width=True)
-                else:
-                    st.info("There were no open tickets in this period.")
+                else: st.info("There were no open tickets in this period.")
 
     st.markdown("<hr/>", unsafe_allow_html=True)
     st.caption("Powered by Pioneer Broadband | Internal Use Only")
