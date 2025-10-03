@@ -2,44 +2,7 @@
 # Version: v19.10.25
 # Pioneer Broadband
 
-API_KEY = "22179825a79dba61013e4fc3b9d30fa4"
-FORM_ID = "252598168633065"
-
-# --- User Authentication with Roles ---
-# For a real application, use st.secrets for this information
-USERS = {
-    "Megan": {
-        "name": "Megan",
-        "password": "30mx,a&a",
-        "role": "admin"
-    },
-    "Karter": {
-        "name": "Karter",
-        "password": "30mx,a&a",
-        "role": "user"
-    },
-    "BJ": {
-        "name": "Bj",
-        "password": "30mx,a&a",
-        "role": "admin"
-    },
-    "Gillian": {
-        "name": "Gillian",
-        "password": "30mx,a&a",
-        "role": "user"
-    },
-    "Gabby": {
-        "name": "Gabby",
-        "password": "30mx,a&a",
-        "role": "user"
-    },
-    "Billy": {
-        "name": "Billy",
-        "password": "30mx,a&a",
-        "role": "user"
-    }
-}
-# --------------------------------
+# All sensitive data has been moved to .streamlit/secrets.toml
 
 FIELD_ID = {
     "name_first": "first_3",
@@ -56,8 +19,8 @@ FIELD_ID = {
     "installed_date": 15,
     "waiting_on_customer_date": 16,
     "assigned_to": 20,
-    "next_action_date": 21, # <-- IMPORTANT: Replace 21 with your new Date ID
-    "next_action": 22,      # <-- IMPORTANT: Replace 22 with your new Text Area ID
+    "next_action_date": 21,
+    "next_action": 22,
 }
 
 STATUS_LIST = ["Survey Scheduled","Survey Completed","Scheduled","Installed","Waiting on Customer","Lost"]
